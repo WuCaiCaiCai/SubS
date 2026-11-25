@@ -1,0 +1,19 @@
+# 构建产物
+/subs
+/dist/
+web/dist/*
+!web/dist/.gitkeep
+web/node_modules/
+web/*.tsbuildinfo
+
+# 运行时数据
+/data/
+*.db
+*.db-wal
+*.db-shm
+*.sbox
+master.key
+
+# 工具缓存
+.playwright-mcp/
+.DS_Store

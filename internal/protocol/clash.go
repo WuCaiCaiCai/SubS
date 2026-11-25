@@ -45,7 +45,15 @@ func clashProxyToConfig(p map[string]any) (Config, error) {
 	typ := strings.ToLower(str(p["type"]))
 	host := str(p["server"])
 	port := intOf(p["port"])
-	if host == "" || port < 1 || port > 65535 {
+	portRange := str(p["port-range"])
+	if host == "" {
+		return Config{}, fmt.Errorf("缺少 server/port")
+	}
+	// mieru 允许只写 port-range，其余协议必须给出单端口。
+	if typ != "mieru" && (port < 1 || port > 65535) {
+		return Config{}, fmt.Errorf("缺少 server/port")
+	}
+	if typ == "mieru" && (port < 1 || port > 65535) && strings.TrimSpace(portRange) == "" {
 		return Config{}, fmt.Errorf("缺少 server/port")
 	}
 	tls := map[string]any{
@@ -128,9 +136,28 @@ func clashProxyToConfig(p map[string]any) (Config, error) {
 		if user == "" || pass == "" {
 			return Config{}, fmt.Errorf("Mieru 需要用户名与密码")
 		}
-		return Config{Protocol: "mieru", Host: host, Port: port,
+		cfg := Config{Protocol: "mieru", Host: host, Port: port,
 			Auth:      map[string]any{"username": user, "password": pass},
-			Transport: tls}, nil
+			Transport: tls,
+			Extra:     map[string]any{"transport": strings.ToUpper(firstNonEmpty(str(p["transport"]), "TCP"))}}
+		if strings.TrimSpace(portRange) != "" {
+			lo, hi, err := parsePortRange(portRange)
+			if err != nil {
+				return Config{}, err
+			}
+			cfg.Extra["portRange"] = fmt.Sprintf("%d-%d", lo, hi)
+			cfg.Port = 0
+		}
+		if v := str(p["multiplexing"]); v != "" {
+			cfg.Extra["multiplexing"] = normaliseMultiplexing(strings.ToUpper(v))
+		}
+		if v := str(p["handshake-mode"]); v != "" {
+			cfg.Extra["handshakeMode"] = normaliseHandshake(strings.ToUpper(v))
+		}
+		if v := str(p["traffic-pattern"]); v != "" {
+			cfg.Extra["trafficPattern"] = v
+		}
+		return cfg, nil
 	default:
 		return Config{}, errIgnoredProxy
 	}

@@ -1,9 +1,6 @@
 package server
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -18,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"filippo.io/age"
 	"github.com/go-chi/chi/v5"
+	"github.com/wucai/subs/internal/backup"
 	"github.com/wucai/subs/internal/store"
 )
 
@@ -160,84 +157,12 @@ func (s *Server) snapshotDB(r *http.Request) (string, error) {
 	return path, nil
 }
 
-// buildArchive creates an age-encrypted tar.gz of the given files.
 func buildArchive(files map[string][]byte, password string) ([]byte, error) {
-	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
-	tw := tar.NewWriter(gz)
-	for name, data := range files {
-		hdr := &tar.Header{Name: name, Mode: 0o600, Size: int64(len(data)), ModTime: time.Now()}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return nil, err
-		}
-		if _, err := tw.Write(data); err != nil {
-			return nil, err
-		}
-	}
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	if err := gz.Close(); err != nil {
-		return nil, err
-	}
-	recipient, err := age.NewScryptRecipient(password)
-	if err != nil {
-		return nil, err
-	}
-	var out bytes.Buffer
-	aw, err := age.Encrypt(&out, recipient)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := aw.Write(buf.Bytes()); err != nil {
-		return nil, err
-	}
-	if err := aw.Close(); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), nil
+	return backup.Build(files, password)
 }
 
-// readArchive decrypts and unpacks an .sbox archive.
 func readArchive(data []byte, password string) (map[string][]byte, error) {
-	identity, err := age.NewScryptIdentity(password)
-	if err != nil {
-		return nil, errors.New("备份密码无效")
-	}
-	ar, err := age.Decrypt(bytes.NewReader(data), identity)
-	if err != nil {
-		return nil, errors.New("备份解密失败：密码错误或文件损坏")
-	}
-	gz, err := gzip.NewReader(ar)
-	if err != nil {
-		return nil, errors.New("备份格式错误")
-	}
-	tr := tar.NewReader(gz)
-	out := map[string][]byte{}
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, errors.New("备份格式错误")
-		}
-		if hdr.Name != "metadata.json" && hdr.Name != "db.sqlite" {
-			continue
-		}
-		if hdr.Size > 512<<20 {
-			return nil, errors.New("备份文件过大")
-		}
-		body, err := io.ReadAll(io.LimitReader(tr, 512<<20))
-		if err != nil {
-			return nil, errors.New("读取备份失败")
-		}
-		out[hdr.Name] = body
-	}
-	if out["db.sqlite"] == nil {
-		return nil, errors.New("备份缺少数据库")
-	}
-	return out, nil
+	return backup.Read(data, password)
 }
 
 func (s *Server) downloadBackup(w http.ResponseWriter, r *http.Request) {

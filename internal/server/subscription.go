@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -41,8 +43,10 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 	h.Set("Cache-Control", "private, no-store")
 	h.Set("Content-Disposition", `inline; filename="subs"`)
 	h.Set("Profile-Update-Interval", "24")
+	// 节点名可能含非 ASCII 字符，HTTP 头要求 ASCII：先 URL 编码。
+	h.Set("X-Skipped-Count", strconv.Itoa(len(res.Skipped)))
 	if len(res.Skipped) > 0 {
-		h.Set("X-Skipped-Nodes", strings.Join(res.Skipped, ","))
+		h.Set("X-Skipped-Nodes", url.QueryEscape(strings.Join(res.Skipped, ",")))
 	}
 	switch target {
 	case render.TargetSingBox:

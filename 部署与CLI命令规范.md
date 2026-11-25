@@ -18,7 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/<user>/subs/main/install.sh | bash
 8. 启动服务，生成一次性初始化密钥（打印 + 写 journal，24h 后失效）
 9. 输出访问地址、防火墙提示、HTTPS 反代建议
 
-升级：`subs upgrade` 或重跑安装命令 → 备份数据库快照到 `/var/lib/subs/pre-upgrade-<ts>.db` → 替换二进制 → 重启；失败自动回滚二进制。
+升级：重跑安装命令 → 备份数据库快照到 `/var/lib/subs/pre-upgrade-<ts>.db` → 替换二进制（旧的保留为 `/usr/local/bin/subs.old`）→ 重启；失败可手动回滚二进制。
 卸载：`subs uninstall` → 询问是否保留数据，停服务删 unit/二进制/用户，按选择处理数据目录。
 
 ## 2. 本地 CLI 子命令（需 root 或 subs 用户，在 VPS 上执行）
@@ -29,7 +29,8 @@ curl -fsSL https://raw.githubusercontent.com/<user>/subs/main/install.sh | bash
 | `subs listen <host> <port>` | 改监听并重启 |
 | `subs backup -o file [-p pass]` | 无网页时的本地备份 |
 | `subs restore file [-p pass]` | 本地恢复（恢复前自动快照当前库） |
-| `subs version` / `subs status` | 版本 / 服务与数据库健康 |
+| `subs uninstall [--purge]` | 停服务、删 unit 与二进制；`--purge` 同时删数据目录与系统用户 |
+| `subs version` / `subs status` | 版本 / 实例信息与数据统计 |
 
 CLI 不提供 `destroy`：销毁必须走网页（强确认流程）或 `subs uninstall --purge`（要求交互输入实例名，--purge 含数据目录）。
 

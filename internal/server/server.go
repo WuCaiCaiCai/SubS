@@ -8,8 +8,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"mime"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,11 +32,14 @@ type ctxKey string
 const sessionKey ctxKey = "session"
 
 type Server struct {
-	Store         *store.Store
-	InitToken     string
-	Box           *secrets.Box
-	DataDir       string
-	DBPath        string
+	Store     *store.Store
+	InitToken string
+	Box       *secrets.Box
+	DataDir   string
+	DBPath    string
+	// Version is the build-stamped version (ldflags -X main.version). The
+	// instance table keeps its own column for compatibility with older rows.
+	Version       string
 	Backups       backupStore
 	loginMu       sync.Mutex
 	loginAttempts map[string][]time.Time
@@ -84,12 +91,14 @@ func (s *Server) Router() http.Handler {
 		r.Use(s.requireAuth)
 		r.Get("/api/system", s.system)
 		r.Put("/api/system/listen", s.csrf(s.listen))
+		r.Put("/api/system", s.csrf(s.updateSystem))
 		r.Get("/api/airports", s.listAirports)
 		r.Post("/api/airports", s.csrf(s.createAirport))
 		r.Get("/api/airports/{id}", s.getAirport)
 		r.Put("/api/airports/{id}", s.csrf(s.updateAirport))
 		r.Delete("/api/airports/{id}", s.csrf(s.deleteAirport))
 		r.Post("/api/airports/{id}/refresh", s.csrf(s.refreshAirport))
+		r.Post("/api/airports/{id}/confirm-new", s.csrf(s.confirmNew))
 		r.Get("/api/servers", s.listServers)
 		r.Post("/api/servers", s.csrf(s.createServer))
 		r.Get("/api/servers/{id}", s.getServer)
@@ -98,6 +107,7 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/nodes", s.listNodes)
 		r.Post("/api/nodes", s.csrf(s.createNode))
 		r.Post("/api/nodes/import", s.csrf(s.importNodes))
+		r.Post("/api/nodes/confirm-new", s.csrf(s.confirmAllNew))
 		r.Get("/api/nodes/{id}", s.getNode)
 		r.Put("/api/nodes/{id}", s.csrf(s.updateNode))
 		r.Delete("/api/nodes/{id}", s.csrf(s.deleteNode))
@@ -142,20 +152,46 @@ func (s *Server) serveFrontend(w http.ResponseWriter, r *http.Request) {
 		name = "index.html"
 	}
 	if err != nil {
-		http.Error(w, "frontend unavailable", http.StatusServiceUnavailable)
+		http.Error(w, "前端资源缺失：请先执行 make build（或 cd web && npm run build）再编译二进制", http.StatusServiceUnavailable)
 		return
 	}
-	switch {
-	case strings.HasSuffix(name, ".js"):
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-	case strings.HasSuffix(name, ".css"):
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-	case strings.HasSuffix(name, ".svg"):
-		w.Header().Set("Content-Type", "image/svg+xml")
-	}
+	w.Header().Set("Content-Type", contentTypeFor(name))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Hashed asset names are immutable; index.html must always revalidate so
+	// upgrades are picked up without a hard refresh.
+	if strings.HasPrefix(path, "assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
 	_, _ = w.Write(data)
 }
+
+func contentTypeFor(name string) string {
+	switch {
+	case strings.HasSuffix(name, ".js"):
+		return "text/javascript; charset=utf-8"
+	case strings.HasSuffix(name, ".css"):
+		return "text/css; charset=utf-8"
+	case strings.HasSuffix(name, ".html"):
+		return "text/html; charset=utf-8"
+	case strings.HasSuffix(name, ".woff2"):
+		return "font/woff2"
+	case strings.HasSuffix(name, ".svg"):
+		return "image/svg+xml"
+	case strings.HasSuffix(name, ".png"):
+		return "image/png"
+	case strings.HasSuffix(name, ".ico"):
+		return "image/x-icon"
+	case strings.HasSuffix(name, ".json"):
+		return "application/json; charset=utf-8"
+	}
+	if ct := mime.TypeByExtension(filepath.Ext(name)); ct != "" {
+		return ct
+	}
+	return "application/octet-stream"
+}
+
 func recoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -356,15 +392,83 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 func (s *Server) system(w http.ResponseWriter, r *http.Request) {
-	var host, version string
+	var name, host, dbVersion string
 	var port int
-	err := s.Store.DB().QueryRowContext(r.Context(), "SELECT listen_host,listen_port,version FROM instance WHERE id=1").Scan(&host, &port, &version)
+	var external sql.NullString
+	err := s.Store.DB().QueryRowContext(r.Context(),
+		"SELECT name,listen_host,listen_port,version,external_url FROM instance WHERE id=1").
+		Scan(&name, &host, &port, &dbVersion, &external)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		fail(w, 500, "database_error", "读取系统状态失败")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"version": version, "listenHost": host, "listenPort": port})
+	count := func(query string) int64 {
+		var n int64
+		_ = s.Store.DB().QueryRowContext(r.Context(), query).Scan(&n)
+		return n
+	}
+	lastBackup := ""
+	_ = s.Store.DB().QueryRowContext(r.Context(),
+		"SELECT COALESCE(max(created_at),'') FROM backup_record").Scan(&lastBackup)
+	var diskUsed int64
+	if info, e := os.Stat(s.DBPath); e == nil {
+		diskUsed = info.Size()
+	}
+	appVersion := s.Version
+	if appVersion == "" {
+		appVersion = dbVersion
+	}
+	writeJSON(w, 200, map[string]any{
+		"instanceName":  name,
+		"version":       appVersion,
+		"listenHost":    host,
+		"listenPort":    port,
+		"externalUrl":   external.String,
+		"diskUsedBytes": diskUsed,
+		"airports":      count("SELECT count(*) FROM airport"),
+		"servers":       count("SELECT count(*) FROM server"),
+		"nodes":         count("SELECT count(*) FROM node"),
+		"newNodes":      count("SELECT count(*) FROM node WHERE is_new=1"),
+		"missingNodes":  count("SELECT count(*) FROM node WHERE missing=1"),
+		"profiles":      count("SELECT count(*) FROM profile"),
+		"lastBackupAt":  lastBackup,
+	})
 }
+func (s *Server) updateSystem(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		InstanceName string `json:"instanceName"`
+		ExternalURL  string `json:"externalUrl"`
+	}
+	if decodeJSON(w, r, &in, 8192) != nil {
+		fail(w, 400, "invalid_input", "请求体格式错误")
+		return
+	}
+	name := strings.TrimSpace(in.InstanceName)
+	if name == "" || len(name) > 64 {
+		fail(w, 400, "invalid_input", "实例名需为 1-64 个字符")
+		return
+	}
+	ext := strings.TrimSpace(in.ExternalURL)
+	if ext != "" {
+		u, err := url.Parse(ext)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			fail(w, 400, "invalid_url", "外部地址需为完整的 http(s) URL")
+			return
+		}
+		if strings.ContainsAny(ext, " \t\n") {
+			fail(w, 400, "invalid_url", "外部地址不能包含空白字符")
+			return
+		}
+		ext = strings.TrimSuffix(ext, "/")
+	}
+	if _, err := s.Store.DB().ExecContext(r.Context(),
+		"UPDATE instance SET name=?,external_url=? WHERE id=1", name, nullString(ext)); err != nil {
+		fail(w, 500, "database_error", "保存设置失败")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"instanceName": name, "externalUrl": ext})
+}
+
 func (s *Server) listen(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Host string `json:"host"`

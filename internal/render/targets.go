@@ -32,11 +32,9 @@ func renderSingBox(nodes []Node) (Result, error) {
 	}
 	body := marshal(head)
 
-	res := Result{Body: body, Skipped: skipped}
-	if len(skipped) > 0 {
-		res.Body = fmt.Sprintf("// 已跳过节点（sing-box 不支持）: %s\n%s", strings.Join(skipped, ", "), body)
-	}
-	return res, nil
+	// sing-box 解析严格 JSON，不能写注释：被跳过的节点通过 Result.Skipped
+	// 传给调用方（预览接口的 skipped 字段与响应头 X-Skipped-Nodes）。
+	return Result{Body: body, Skipped: skipped}, nil
 }
 
 func singBoxOutbound(n Node) (map[string]any, error) {

@@ -164,5 +164,8 @@ func (s *Server) validateTemplate(w http.ResponseWriter, r *http.Request) {
 		status = issues[0].Message
 	}
 	_, _ = s.Store.DB().ExecContext(r.Context(), "UPDATE template SET last_check=? WHERE id=?", status, id)
+	if issues == nil {
+		issues = []render.Issue{}
+	}
 	writeJSON(w, 200, map[string]any{"ok": len(issues) == 0, "errors": issues, "lastCheck": nowRFC3339()})
 }

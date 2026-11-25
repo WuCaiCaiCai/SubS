@@ -40,6 +40,22 @@ func ParseLine(line string) (Result, error) {
 	if !ok {
 		return Result{}, fmt.Errorf("不是有效的分享链接")
 	}
+	if strings.EqualFold(scheme, "mieru") {
+		cfg, err := parseMieruShareLink(line)
+		if err != nil {
+			return Result{}, err
+		}
+		name := ""
+		if i := strings.Index(line, "#"); i >= 0 {
+			if decoded, e := url.PathUnescape(line[i+1:]); e == nil {
+				name = strings.TrimSpace(decoded)
+			}
+		}
+		if name == "" {
+			name = mieruDisplayName(cfg)
+		}
+		return Result{Name: name, Config: cfg}, nil
+	}
 	u, err := url.Parse(line)
 	if err != nil {
 		return Result{}, fmt.Errorf("链接格式错误")
@@ -60,8 +76,6 @@ func ParseLine(line string) (Result, error) {
 		cfg, err = parseTUIC(u)
 	case "anytls":
 		cfg, err = parseAnyTLS(u)
-	case "mieru":
-		cfg, err = parseMieru(u)
 	default:
 		_ = rest
 		return Result{}, fmt.Errorf("不支持的协议: %s", scheme)
@@ -231,27 +245,6 @@ func parseAnyTLS(u *url.URL) (Config, error) {
 	}, nil
 }
 
-func parseMieru(u *url.URL) (Config, error) {
-	host, port, err := splitHostPort(u)
-	if err != nil {
-		return Config{}, err
-	}
-	username, password := "", ""
-	if u.User != nil {
-		username = u.User.Username()
-		password, _ = u.User.Password()
-	}
-	if username == "" || password == "" {
-		return Config{}, fmt.Errorf("Mieru 需要用户名与密码")
-	}
-	q := u.Query()
-	return Config{
-		Protocol: "mieru", Host: host, Port: port,
-		Auth:      map[string]any{"username": username, "password": password},
-		Transport: map[string]any{"sni": q.Get("sni"), "insecure": qBool(q, "insecure")},
-	}, nil
-}
-
 func validUUID(s string) bool {
 	if len(s) != 36 {
 		return false
@@ -288,6 +281,9 @@ func ParseSubscription(body []byte) ([]Parsed, []ParseError, int) {
 	text := string(body)
 	if decoded, ok := decodeBase64List(text); ok {
 		text = decoded
+	}
+	if looksLikeMieruProfile(text) {
+		return parseMieruProfile(text)
 	}
 	if looksLikeYAML(text) {
 		return parseClashYAML(text)
@@ -335,6 +331,10 @@ func looksLikeYAML(text string) bool {
 func Fingerprint(c Config) string {
 	auth, _ := json.Marshal(c.Auth)
 	parts := []string{strings.ToLower(c.Protocol), strings.ToLower(strings.TrimSpace(c.Host)), strconv.Itoa(c.Port), string(auth)}
+	// mieru may listen on a port range instead of a single port.
+	if pr, ok := c.Extra["portRange"].(string); ok && pr != "" {
+		parts = append(parts, strings.ToLower(pr))
+	}
 	return hashParts(parts)
 }
 

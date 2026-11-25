@@ -29,7 +29,12 @@ func proxyEntries(n Node) ([]kv, error) {
 	}
 	set("name", n.Name)
 	set("server", c.Host)
-	set("port", c.Port)
+	// mieru 可以用端口范围代替单端口。
+	if pr := extraString(c, "portRange"); pr != "" && c.Port == 0 {
+		set("port-range", pr)
+	} else {
+		set("port", c.Port)
+	}
 	switch c.Protocol {
 	case "hy2":
 		set("type", "hysteria2")
@@ -124,8 +129,17 @@ func proxyEntries(n Node) ([]kv, error) {
 		set("type", "mieru")
 		set("username", authString(c, "username"))
 		set("password", authString(c, "password"))
-		if transportBool(c, "insecure") {
-			set("skip-cert-verify", true)
+		if t := strings.ToUpper(extraString(c, "transport")); t != "" {
+			set("transport", t)
+		}
+		if v := extraString(c, "multiplexing"); v != "" {
+			set("multiplexing", v)
+		}
+		if v := extraString(c, "handshakeMode"); v != "" {
+			set("handshake-mode", v)
+		}
+		if v := extraString(c, "trafficPattern"); v != "" {
+			set("traffic-pattern", v)
 		}
 	default:
 		return nil, fmt.Errorf("不支持的协议: %s", c.Protocol)

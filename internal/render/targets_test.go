@@ -1,8 +1,11 @@
 package render
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/wucai/subs/internal/protocol"
 )
@@ -42,8 +45,13 @@ func TestRenderSingBoxAllProtocols(t *testing.T) {
 	if len(res.Skipped) != 1 || res.Skipped[0] != "05-DE-MIERU" {
 		t.Fatalf("skipped=%v", res.Skipped)
 	}
-	if !strings.Contains(res.Body, "已跳过节点") {
-		t.Error("missing skip comment")
+	// sing-box 只接受纯 JSON，被跳过的节点必须通过 Result.Skipped 暴露，
+	// 不能写进 body（否则客户端解析失败）。
+	if !json.Valid([]byte(res.Body)) {
+		t.Error("sing-box body must be valid JSON")
+	}
+	if strings.Contains(res.Body, "已跳过") {
+		t.Error("sing-box body must not contain comments")
 	}
 }
 
@@ -127,5 +135,58 @@ func TestSupportsMatrix(t *testing.T) {
 				t.Errorf("%s should support %s", tg, p)
 			}
 		}
+	}
+}
+
+func TestRenderMihomoMieruPortRange(t *testing.T) {
+	tpl := "proxies: ~\nproxy-groups:\n  - name: PROXY\n    type: select\n    include-all: true\nrules:\n  - MATCH,PROXY\n"
+	res, err := Render(TargetMihomo, tpl, []Node{{Name: "01-DE-MIERU", Config: protocol.Config{
+		Protocol: "mieru", Host: "de.example.com", Port: 0,
+		Auth:      map[string]any{"username": "alice", "password": "s3cret"},
+		Transport: map[string]any{"sni": "", "insecure": false},
+		Extra: map[string]any{
+			"transport":      "UDP",
+			"portRange":      "2090-2099",
+			"multiplexing":   "MULTIPLEXING_HIGH",
+			"handshakeMode":  "HANDSHAKE_NO_WAIT",
+			"trafficPattern": "QUJD",
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Proxies []map[string]any `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal([]byte(res.Body), &doc); err != nil {
+		t.Fatalf("rendered YAML is invalid: %v", err)
+	}
+	if len(doc.Proxies) != 1 {
+		t.Fatalf("proxies = %d", len(doc.Proxies))
+	}
+	p := doc.Proxies[0]
+	if p["type"] != "mieru" {
+		t.Errorf("type = %v", p["type"])
+	}
+	if p["port-range"] != "2090-2099" {
+		t.Errorf("port-range = %v", p["port-range"])
+	}
+	if _, hasPort := p["port"]; hasPort {
+		t.Error("port must be omitted when port-range is used")
+	}
+	if p["transport"] != "UDP" {
+		t.Errorf("transport = %v", p["transport"])
+	}
+	if p["multiplexing"] != "MULTIPLEXING_HIGH" {
+		t.Errorf("multiplexing = %v", p["multiplexing"])
+	}
+	if p["handshake-mode"] != "HANDSHAKE_NO_WAIT" {
+		t.Errorf("handshake-mode = %v", p["handshake-mode"])
+	}
+	if p["traffic-pattern"] != "QUJD" {
+		t.Errorf("traffic-pattern = %v", p["traffic-pattern"])
+	}
+	if p["username"] != "alice" || p["password"] != "s3cret" {
+		t.Errorf("credentials missing: %v", p)
 	}
 }

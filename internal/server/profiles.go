@@ -185,14 +185,21 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		Enabled    *bool           `json:"enabled"`
 		NamingRule json.RawMessage `json:"namingRule"`
 	}
-	if decodeJSON(w, r, &in, 64<<10) != nil || strings.TrimSpace(in.Name) == "" {
-		fail(w, 400, "invalid_input", "编排名称不能为空")
+	if decodeJSON(w, r, &in, 64<<10) != nil {
+		fail(w, 400, "invalid_input", "请求体格式错误")
 		return
 	}
+	// Partial updates are allowed: empty name/template keeps the current value.
 	var curTemplate int64
-	if err := s.Store.DB().QueryRowContext(r.Context(), "SELECT template_id FROM profile WHERE id=?", id).Scan(&curTemplate); err != nil {
+	var curName string
+	if err := s.Store.DB().QueryRowContext(r.Context(),
+		"SELECT template_id,name FROM profile WHERE id=?", id).Scan(&curTemplate, &curName); err != nil {
 		fail(w, 404, "not_found", "编排不存在")
 		return
+	}
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		name = curName
 	}
 	templateID := in.TemplateID
 	if templateID < 1 {
@@ -219,7 +226,7 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := s.Store.DB().ExecContext(r.Context(),
 		"UPDATE profile SET name=?,note=?,template_id=?,enabled=?,naming_rule=? WHERE id=?",
-		strings.TrimSpace(in.Name), nullString(in.Note), templateID, enabled, string(ruleJSON), id); err != nil {
+		name, nullString(in.Note), templateID, enabled, string(ruleJSON), id); err != nil {
 		fail(w, 500, "database_error", "更新编排失败")
 		return
 	}
@@ -255,13 +262,27 @@ func (s *Server) setProfileNodes(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var in []struct {
+	type nodeInput struct {
 		NodeID       int64  `json:"nodeId"`
 		NameOverride string `json:"nameOverride"`
 	}
-	if decodeJSON(w, r, &in, 512<<10) != nil {
+	// Spec form is a bare ordered array; accept {"nodes": [...]} as well so
+	// hand-written clients and the web UI can share one endpoint.
+	var raw json.RawMessage
+	if decodeJSON(w, r, &raw, 512<<10) != nil {
 		fail(w, 400, "invalid_input", "请求体格式错误")
 		return
+	}
+	var in []nodeInput
+	if err := json.Unmarshal(raw, &in); err != nil {
+		var wrapped struct {
+			Nodes []nodeInput `json:"nodes"`
+		}
+		if err := json.Unmarshal(raw, &wrapped); err != nil {
+			fail(w, 400, "invalid_input", "请求体格式错误")
+			return
+		}
+		in = wrapped.Nodes
 	}
 	err := s.Store.Write(r.Context(), func(tx *sql.Tx) error {
 		var exists int

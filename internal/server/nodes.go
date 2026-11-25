@@ -20,6 +20,7 @@ type nodeView struct {
 	RawName     string          `json:"rawName"`
 	Host        string          `json:"host"`
 	Port        int             `json:"port"`
+	PortRange   string          `json:"portRange"`
 	Fingerprint string          `json:"fingerprint"`
 	Config      json.RawMessage `json:"config"`
 	Enabled     bool            `json:"enabled"`
@@ -50,16 +51,17 @@ func scanNode(rows interface{ Scan(...any) error }) (nodeView, error) {
 	v.Missing = missing != 0
 	v.IsNew = isNew != 0
 	v.Tags = parseTags(tags)
-	v.Host, v.Port = configEndpoint(v.Config)
+	v.Host, v.Port, v.PortRange = configEndpoint(v.Config)
 	return v, nil
 }
 
-func configEndpoint(raw json.RawMessage) (string, int) {
+func configEndpoint(raw json.RawMessage) (string, int, string) {
 	var c protocol.Config
 	if json.Unmarshal(raw, &c) == nil {
-		return c.Host, c.Port
+		pr, _ := c.Extra["portRange"].(string)
+		return c.Host, c.Port, pr
 	}
-	return "", 0
+	return "", 0, ""
 }
 
 func (s *Server) listNodes(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +337,18 @@ func (s *Server) importNodes(w http.ResponseWriter, r *http.Request) {
 		out.Saved = saved
 	}
 	writeJSON(w, 200, out)
+}
+
+// confirmAllNew 清除所有机场节点的“待确认”标记。
+func (s *Server) confirmAllNew(w http.ResponseWriter, r *http.Request) {
+	res, err := s.Store.DB().ExecContext(r.Context(),
+		"UPDATE node SET is_new=0 WHERE source_type='airport' AND is_new=1")
+	if err != nil {
+		fail(w, 500, "database_error", "确认新节点失败")
+		return
+	}
+	n, _ := res.RowsAffected()
+	writeJSON(w, 200, map[string]any{"confirmed": n})
 }
 
 var _ = errors.Is

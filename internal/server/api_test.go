@@ -238,8 +238,11 @@ func TestSubscriptionNegotiatesByUA(t *testing.T) {
 	if singbox.Code != 200 || !strings.Contains(singbox.Body.String(), `"type": "hysteria2"`) {
 		t.Fatalf("singbox body: %s", singbox.Body.String())
 	}
-	if !strings.Contains(singbox.Body.String(), "已跳过节点") {
-		t.Error("sing-box should report skipped mieru node")
+	if !json.Valid(singbox.Body.Bytes()) {
+		t.Error("sing-box body must be valid JSON (no comments)")
+	}
+	if got := singbox.Header().Get("X-Skipped-Nodes"); got == "" {
+		t.Error("sing-box should report skipped mieru node via header")
 	}
 	loon := fetch("Loon/3.2")
 	if loon.Code != 200 || !strings.Contains(loon.Body.String(), "[Proxy]") {
