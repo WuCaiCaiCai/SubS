@@ -10,6 +10,7 @@
 -- 实例设置（单行）
 CREATE TABLE instance (
   id              INTEGER PRIMARY KEY CHECK (id = 1),
+  name            TEXT NOT NULL DEFAULT 'my-subs', -- 实例名，销毁确认短语用
   listen_host     TEXT NOT NULL DEFAULT '127.0.0.1',
   listen_port     INTEGER NOT NULL DEFAULT 8787,
   external_url    TEXT,              -- 可选，生成订阅链接用
@@ -94,6 +95,23 @@ CREATE TABLE profile_node (
   PRIMARY KEY (profile_id, node_id)
 );
 
+-- 管理会话（服务端 session，reset-password 时整表清空）
+CREATE TABLE admin_session (
+  id         TEXT PRIMARY KEY,        -- 32 字节随机 base62
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  ip         TEXT
+);
+
+-- 备份下载记录（销毁时核对 sha256 用）
+CREATE TABLE backup_record (
+  id            INTEGER PRIMARY KEY,
+  sha256        TEXT NOT NULL UNIQUE,
+  size_bytes    INTEGER NOT NULL,
+  downloaded_at TEXT,                 -- NULL = 生成后未下载
+  created_at    TEXT NOT NULL
+);
+
 -- 审计（不含任何秘密）
 CREATE TABLE audit (
   id INTEGER PRIMARY KEY, at TEXT NOT NULL,
@@ -136,7 +154,7 @@ GET/PUT/DELETE /api/servers/:id[?force=1]
 ```
 GET    /api/nodes?sourceType=&sourceId=&protocol=&q=&enabled=&isNew=&missing=
 POST   /api/nodes            {sourceId, protocol, rawName, config}   自建
-POST   /api/nodes/import     {sourceId, text}      → {parsed[], errors[]} 预览
+POST   /api/nodes/import     {sourceId, text}      → {parsed: [{rawName, protocol, host, port, previewConfig}], errors: [{line, reason}]} 预览
 PUT    /api/nodes/:id
 DELETE /api/nodes/:id
 POST   /api/nodes/:id/duplicate

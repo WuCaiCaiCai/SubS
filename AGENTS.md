@@ -15,7 +15,7 @@
 - 后端：Go（单一静态二进制，前端资源 embed）
 - 前端：Vite + React + TypeScript + Tailwind + shadcn/ui + lucide-react，Motion 用于动效
 - 数据库：SQLite（单文件，WAL 模式）
-- 目标客户端：Mihomo（主力）、sing-box、iOS Shadowrocket（小气球；若确认是 Loon/Stash 见 DECISIONS.md）
+- 目标客户端：Mihomo（主力）、sing-box、iOS **Loon**（已确认，见 DECISIONS.md）
 - 部署：GitHub Release + 一条 `curl | bash` 安装命令 + systemd
 
 ## 代码规范
