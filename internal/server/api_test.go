@@ -1,6 +1,7 @@
 package server
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"mime/multipart"
@@ -390,3 +391,116 @@ func TestNamingRuleValidation(t *testing.T) {
 }
 
 var _ = profile.HashToken
+
+func TestProfileSourceSelection(t *testing.T) {
+	c, _ := newAPI(t)
+	c.do(http.MethodPost, "/api/servers", map[string]any{"name": "VPS"}, nil, 201)
+	c.do(http.MethodPost, "/api/nodes/import", map[string]any{
+		"sourceId": 1, "commit": true,
+		"text": "hy2://pw@hk.example.com:443?sni=hk.example.com#香港01\n" +
+			"hy2://pw@jp.example.com:443?sni=jp.example.com#东京02\n",
+	}, nil, 200)
+	raw, _ := os.ReadFile("../../模板示例/Client.yaml")
+	c.do(http.MethodPost, "/api/templates", map[string]any{"name": "Client", "content": string(raw)}, nil, 201)
+	c.do(http.MethodPost, "/api/profiles", map[string]any{"name": "P", "templateId": 1}, nil, 201)
+
+	names := func(body []byte) []string {
+		var nodes []profileNodeView
+		if err := json.Unmarshal(body, &nodes); err != nil {
+			t.Fatalf("decode profile nodes: %v (%s)", err, body)
+		}
+		out := make([]string, 0, len(nodes))
+		for _, n := range nodes {
+			out = append(out, n.RawName)
+		}
+		return out
+	}
+
+	// 整源选择：一次引用 VPS，展开成它当前的全部节点。
+	whole := c.do(http.MethodPut, "/api/profiles/1/nodes", map[string]any{
+		"items": []map[string]any{{"kind": "source", "refId": 1, "sourceType": "server"}},
+	}, nil, 200)
+	if got := names(whole); len(got) != 2 {
+		t.Fatalf("source selection should expand to 2 nodes, got %v", got)
+	}
+
+	var detail profileView
+	json.Unmarshal(c.do(http.MethodGet, "/api/profiles/1", nil, nil, 200), &detail)
+	if detail.NodeCount != 2 || len(detail.Items) != 1 || detail.Items[0].Kind != "source" {
+		t.Fatalf("profile detail: nodeCount=%d items=%+v", detail.NodeCount, detail.Items)
+	}
+
+	// 整源 + 单节点混合：被单独挑出的节点只出现一次，并排在整源之前。
+	nodes := c.listNodes(t)
+	mixed := c.do(http.MethodPut, "/api/profiles/1/nodes", map[string]any{
+		"items": []map[string]any{
+			{"kind": "node", "refId": nodes[1].ID},
+			{"kind": "source", "refId": 1, "sourceType": "server"},
+		},
+	}, nil, 200)
+	if got := names(mixed); len(got) != 2 || got[0] != nodes[1].RawName {
+		t.Fatalf("mixed selection order/dedupe wrong: %v (want %s first)", got, nodes[1].RawName)
+	}
+
+	// 旧版裸数组仍然可用。
+	legacy := c.do(http.MethodPut, "/api/profiles/1/nodes", []map[string]any{
+		{"nodeId": nodes[0].ID},
+	}, nil, 200)
+	if got := names(legacy); len(got) != 1 {
+		t.Fatalf("legacy payload should keep working, got %v", got)
+	}
+
+	// 删除来源被引用：默认 409，加 force 后清理选择项。
+	c.do(http.MethodDelete, "/api/servers/1", nil, nil, 409)
+	c.do(http.MethodDelete, "/api/servers/1?force=1", nil, nil, 204)
+	var items []itemView
+	json.Unmarshal(c.do(http.MethodGet, "/api/profiles/1/items", nil, nil, 200), &items)
+	if len(items) != 0 {
+		t.Fatalf("items should be cleaned after source delete, got %+v", items)
+	}
+}
+
+func TestSubscriptionBundleZip(t *testing.T) {
+	c, _ := newAPI(t)
+	c.do(http.MethodPost, "/api/servers", map[string]any{"name": "VPS 一号"}, nil, 201)
+	c.do(http.MethodPost, "/api/nodes/import", map[string]any{
+		"sourceId": 1, "commit": true,
+		"text": "hy2://pw@hk.example.com:443?sni=hk.example.com#香港01\n",
+	}, nil, 200)
+	raw, _ := os.ReadFile("../../模板示例/Client.yaml")
+	c.do(http.MethodPost, "/api/templates", map[string]any{"name": "Client", "content": string(raw)}, nil, 201)
+	var p struct {
+		Token string `json:"token"`
+	}
+	json.Unmarshal(c.do(http.MethodPost, "/api/profiles", map[string]any{
+		"name": "日常", "templateId": 1}, nil, 201), &p)
+	c.do(http.MethodPut, "/api/profiles/1/nodes", map[string]any{
+		"items": []map[string]any{{"kind": "source", "refId": 1, "sourceType": "server"}},
+	}, nil, 200)
+
+	r := httptest.NewRequest(http.MethodGet, "/s/"+p.Token+"/bundle.zip", nil)
+	w := httptest.NewRecorder()
+	c.h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("bundle status=%d body=%s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/zip" {
+		t.Errorf("content-type=%q", ct)
+	}
+	if cd := w.Header().Get("Content-Disposition"); !strings.Contains(cd, "attachment") {
+		t.Errorf("disposition=%q", cd)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+	if err != nil {
+		t.Fatalf("zip: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, f := range zr.File {
+		seen[f.Name] = true
+	}
+	for _, want := range []string{"subs.yaml", "subs.json", "subs.conf", "README.txt"} {
+		if !seen[want] {
+			t.Errorf("missing %s in bundle (%v)", want, seen)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -26,6 +27,20 @@ type profileView struct {
 	NodeCount    int64           `json:"nodeCount"`
 	// URL is the ready-to-paste subscription link, derived from instance.external_url.
 	URL string `json:"url"`
+	// Items 只在单项详情里返回，列表接口留空。
+	Items []itemView `json:"items,omitempty"`
+}
+
+// itemView 是编排选择项（节点或整源）的管理视图。
+type itemView struct {
+	Kind         string `json:"kind"`
+	RefID        int64  `json:"refId"`
+	SourceType   string `json:"sourceType"`
+	NameOverride string `json:"nameOverride"`
+	SortOrder    int64  `json:"sortOrder"`
+	Label        string `json:"label"`
+	Protocol     string `json:"protocol"`
+	NodeCount    int64  `json:"nodeCount"`
 }
 
 type profileNodeView struct {
@@ -34,6 +49,8 @@ type profileNodeView struct {
 	SortOrder    int64  `json:"sortOrder"`
 	RawName      string `json:"rawName"`
 	Protocol     string `json:"protocol"`
+	SourceType   string `json:"sourceType"`
+	SourceID     int64  `json:"sourceId"`
 	SourceName   string `json:"sourceName"`
 	OutputName   string `json:"outputName"`
 }
@@ -51,7 +68,13 @@ func (s *Server) loadProfile(r *http.Request, id int64) (profileView, error) {
 	err := s.Store.DB().QueryRowContext(r.Context(),
 		`SELECT p.id,p.name,COALESCE(p.note,''),p.template_id,COALESCE(t.name,''),p.enabled,
 		        p.naming_rule,p.secret_token,COALESCE(p.last_fetch_at,''),
-		        (SELECT count(*) FROM profile_node pn WHERE pn.profile_id=p.id)
+		        (SELECT count(*) FROM profile_item i JOIN node n
+		              ON (i.kind='node' AND n.id=i.ref_id)
+		              OR (i.kind='source' AND n.source_type=i.source_type AND n.source_id=i.ref_id)
+		          WHERE i.profile_id=p.id AND n.enabled=1 AND n.missing=0
+		            AND (i.kind='node' OR NOT EXISTS (
+		                  SELECT 1 FROM profile_item x
+		                  WHERE x.profile_id=i.profile_id AND x.kind='node' AND x.ref_id=n.id)))
 		 FROM profile p LEFT JOIN template t ON t.id=p.template_id WHERE p.id=?`, id).
 		Scan(&v.ID, &v.Name, &note, &v.TemplateID, &v.TemplateName, &enabled, &rule, &tokenEnc, &lastFetch, &v.NodeCount)
 	if err != nil {
@@ -170,6 +193,9 @@ func (s *Server) getProfile(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "database_error", "读取编排失败")
 		return
 	}
+	if items, err := s.profileItems(r, id); err == nil {
+		v.Items = items
+	}
 	writeJSON(w, 200, v)
 }
 
@@ -244,8 +270,13 @@ func (s *Server) deleteProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := s.Store.Write(r.Context(), func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(r.Context(), "DELETE FROM profile_node WHERE profile_id=?", id); err != nil {
-			return err
+		for _, q := range []string{
+			"DELETE FROM profile_item WHERE profile_id=?",
+			"DELETE FROM profile_node WHERE profile_id=?",
+		} {
+			if _, err := tx.ExecContext(r.Context(), q, id); err != nil {
+				return err
+			}
 		}
 		_, err := tx.ExecContext(r.Context(), "DELETE FROM profile WHERE id=?", id)
 		return err
@@ -262,27 +293,9 @@ func (s *Server) setProfileNodes(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	type nodeInput struct {
-		NodeID       int64  `json:"nodeId"`
-		NameOverride string `json:"nameOverride"`
-	}
-	// Spec form is a bare ordered array; accept {"nodes": [...]} as well so
-	// hand-written clients and the web UI can share one endpoint.
-	var raw json.RawMessage
-	if decodeJSON(w, r, &raw, 512<<10) != nil {
-		fail(w, 400, "invalid_input", "请求体格式错误")
+	items, ok := decodeProfileItems(w, r)
+	if !ok {
 		return
-	}
-	var in []nodeInput
-	if err := json.Unmarshal(raw, &in); err != nil {
-		var wrapped struct {
-			Nodes []nodeInput `json:"nodes"`
-		}
-		if err := json.Unmarshal(raw, &wrapped); err != nil {
-			fail(w, 400, "invalid_input", "请求体格式错误")
-			return
-		}
-		in = wrapped.Nodes
 	}
 	err := s.Store.Write(r.Context(), func(tx *sql.Tx) error {
 		var exists int
@@ -292,18 +305,23 @@ func (s *Server) setProfileNodes(w http.ResponseWriter, r *http.Request) {
 		if exists == 0 {
 			return sql.ErrNoRows
 		}
-		if _, err := tx.ExecContext(r.Context(), "DELETE FROM profile_node WHERE profile_id=?", id); err != nil {
+		if _, err := tx.ExecContext(r.Context(), "DELETE FROM profile_item WHERE profile_id=?", id); err != nil {
 			return err
 		}
-		seen := map[int64]bool{}
-		for i, item := range in {
-			if item.NodeID < 1 || seen[item.NodeID] {
+		seen := map[string]bool{}
+		for i, item := range items {
+			key := fmt.Sprintf("%s:%s:%d", item.Kind, item.SourceType, item.RefID)
+			if seen[key] {
 				continue
 			}
-			seen[item.NodeID] = true
+			seen[key] = true
+			if err := checkItemTarget(tx, r.Context(), item); err != nil {
+				return err
+			}
 			if _, err := tx.ExecContext(r.Context(),
-				"INSERT INTO profile_node(profile_id,node_id,sort_order,name_override) VALUES(?,?,?,?)",
-				id, item.NodeID, i, nullString(item.NameOverride)); err != nil {
+				`INSERT INTO profile_item(profile_id,kind,ref_id,source_type,sort_order,name_override)
+				 VALUES(?,?,?,?,?,?)`,
+				id, item.Kind, item.RefID, item.SourceType, i, nullString(item.NameOverride)); err != nil {
 				return err
 			}
 		}
@@ -311,6 +329,10 @@ func (s *Server) setProfileNodes(w http.ResponseWriter, r *http.Request) {
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		fail(w, 404, "not_found", "编排不存在")
+		return
+	}
+	if errors.Is(err, errBadItem) {
+		fail(w, 400, "invalid_input", "节点或来源不存在")
 		return
 	}
 	if err != nil {
@@ -325,6 +347,158 @@ func (s *Server) setProfileNodes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, nodes)
 }
 
+var errBadItem = errors.New("unknown selection item")
+
+// itemInput 是编排选择的一项：单个节点或整个来源。
+type itemInput struct {
+	Kind         string `json:"kind"`
+	RefID        int64  `json:"refId"`
+	NodeID       int64  `json:"nodeId"`
+	SourceID     int64  `json:"sourceId"`
+	SourceType   string `json:"sourceType"`
+	NameOverride string `json:"nameOverride"`
+}
+
+// normalise 把三种可接受的写法统一成 node/source + refId：
+//  1. {"items":[{"kind":"node","refId":1}, {"kind":"source","refId":2,"sourceType":"airport"}]} —— 规范形态，保留顺序
+//  2. {"nodes":[{"nodeId":1}], "sources":[{"sourceId":2,"sourceType":"airport"}]} —— 分桶形态
+//  3. [{"nodeId":1},{"nodeId":2}] —— 旧版裸数组
+func (in itemInput) normalise() (itemInput, bool) {
+	out := in
+	if out.Kind == "" {
+		switch {
+		case out.NodeID > 0:
+			out.Kind = "node"
+		case out.SourceID > 0:
+			out.Kind = "source"
+		}
+	}
+	switch out.Kind {
+	case "node":
+		if out.RefID == 0 {
+			out.RefID = out.NodeID
+		}
+		out.SourceType = ""
+		return out, out.RefID > 0
+	case "source":
+		if out.RefID == 0 {
+			out.RefID = out.SourceID
+		}
+		if out.SourceType != "airport" && out.SourceType != "server" {
+			return out, false
+		}
+		return out, out.RefID > 0
+	default:
+		return out, false
+	}
+}
+
+func decodeProfileItems(w http.ResponseWriter, r *http.Request) ([]itemInput, bool) {
+	var raw json.RawMessage
+	if decodeJSON(w, r, &raw, 512<<10) != nil {
+		fail(w, 400, "invalid_input", "请求体格式错误")
+		return nil, false
+	}
+	var wrapped struct {
+		Items   []itemInput `json:"items"`
+		Nodes   []itemInput `json:"nodes"`
+		Sources []itemInput `json:"sources"`
+	}
+	if err := json.Unmarshal(raw, &wrapped); err == nil && len(wrapped.Items)+len(wrapped.Nodes)+len(wrapped.Sources) > 0 {
+		rawItems := append(append([]itemInput{}, wrapped.Items...), wrapped.Nodes...)
+		rawItems = append(rawItems, wrapped.Sources...)
+		return normaliseItems(w, rawItems)
+	}
+	var legacy []itemInput
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		fail(w, 400, "invalid_input", "请求体格式错误")
+		return nil, false
+	}
+	return normaliseItems(w, legacy)
+}
+
+func normaliseItems(w http.ResponseWriter, in []itemInput) ([]itemInput, bool) {
+	if len(in) > 5000 {
+		fail(w, 400, "invalid_input", "单个编排最多 5000 项")
+		return nil, false
+	}
+	out := make([]itemInput, 0, len(in))
+	for _, item := range in {
+		norm, ok := item.normalise()
+		if !ok {
+			continue
+		}
+		out = append(out, norm)
+	}
+	return out, true
+}
+
+// checkItemTarget rejects references to nodes or sources that do not exist.
+func checkItemTarget(tx *sql.Tx, ctx context.Context, item itemInput) error {
+	var q string
+	switch {
+	case item.Kind == "node":
+		q = "SELECT count(*) FROM node WHERE id=?"
+	case item.SourceType == "airport":
+		q = "SELECT count(*) FROM airport WHERE id=?"
+	default:
+		q = "SELECT count(*) FROM server WHERE id=?"
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, q, item.RefID).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return errBadItem
+	}
+	return nil
+}
+
+// itemSelectPath expands one profile_item into its node rows. Explicit node
+// selections win over source expansion so a node never appears twice.
+const itemSelectPath = `JOIN node n
+	 ON (i.kind='node' AND n.id=i.ref_id)
+	 OR (i.kind='source' AND n.source_type=i.source_type AND n.source_id=i.ref_id)`
+
+const itemVisible = `i.profile_id=? AND n.enabled=1 AND n.missing=0
+	AND (i.kind='node' OR NOT EXISTS (
+	      SELECT 1 FROM profile_item x
+	      WHERE x.profile_id=i.profile_id AND x.kind='node' AND x.ref_id=n.id))`
+
+const sourceNameExpr = `CASE WHEN n.source_type='airport'
+	   THEN COALESCE((SELECT a.name FROM airport a WHERE a.id=n.source_id),'')
+	   ELSE COALESCE((SELECT sv.name FROM server sv WHERE sv.id=n.source_id),'') END`
+
+// profileItems returns the raw selection rows (sources stay collapsed).
+func (s *Server) profileItems(r *http.Request, profileID int64) ([]itemView, error) {
+	rows, err := s.Store.DB().QueryContext(r.Context(),
+		`SELECT i.kind,i.ref_id,i.source_type,COALESCE(i.name_override,''),i.sort_order,
+		        CASE i.kind WHEN 'node' THEN COALESCE((SELECT n.raw_name FROM node n WHERE n.id=i.ref_id),'')
+		                    WHEN 'airport' THEN COALESCE((SELECT a.name FROM airport a WHERE a.id=i.ref_id),'')
+		                    ELSE COALESCE((SELECT sv.name FROM server sv WHERE sv.id=i.ref_id),'') END,
+		        CASE i.kind WHEN 'node' THEN COALESCE((SELECT n.protocol FROM node n WHERE n.id=i.ref_id),'')
+		                    ELSE '' END,
+		        CASE i.kind WHEN 'source' THEN (
+		              SELECT count(*) FROM node n WHERE n.source_type=i.source_type AND n.source_id=i.ref_id
+		                AND n.enabled=1 AND n.missing=0)
+		            ELSE 1 END
+		 FROM profile_item i WHERE i.profile_id=? ORDER BY i.sort_order`, profileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []itemView{}
+	for rows.Next() {
+		var v itemView
+		if err := rows.Scan(&v.Kind, &v.RefID, &v.SourceType, &v.NameOverride, &v.SortOrder,
+			&v.Label, &v.Protocol, &v.NodeCount); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 // profileNodes returns the ordered node list with computed output names.
 func (s *Server) profileNodes(r *http.Request, profileID int64) ([]profileNodeView, error) {
 	var ruleRaw string
@@ -337,11 +511,11 @@ func (s *Server) profileNodes(r *http.Request, profileID int64) ([]profileNodeVi
 		return nil, err
 	}
 	rows, err := s.Store.DB().QueryContext(r.Context(),
-		`SELECT pn.node_id, COALESCE(pn.name_override,''), pn.sort_order, n.raw_name, n.protocol,
-		        CASE WHEN n.source_type='airport' THEN COALESCE((SELECT a.name FROM airport a WHERE a.id=n.source_id),'')
-		             ELSE COALESCE((SELECT sv.name FROM server sv WHERE sv.id=n.source_id),'') END
-		 FROM profile_node pn JOIN node n ON n.id=pn.node_id
-		 WHERE pn.profile_id=? ORDER BY pn.sort_order`, profileID)
+		`SELECT n.id, COALESCE(i.name_override,''), i.sort_order, n.raw_name, n.protocol,
+		        n.source_type, n.source_id, `+sourceNameExpr+`
+		 FROM profile_item i `+itemSelectPath+`
+		 WHERE `+itemVisible+`
+		 ORDER BY i.sort_order, n.id`, profileID)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +524,8 @@ func (s *Server) profileNodes(r *http.Request, profileID int64) ([]profileNodeVi
 	var inputs []profile.NodeInput
 	for rows.Next() {
 		var v profileNodeView
-		if err := rows.Scan(&v.NodeID, &v.NameOverride, &v.SortOrder, &v.RawName, &v.Protocol, &v.SourceName); err != nil {
+		if err := rows.Scan(&v.NodeID, &v.NameOverride, &v.SortOrder, &v.RawName, &v.Protocol,
+			&v.SourceType, &v.SourceID, &v.SourceName); err != nil {
 			return nil, err
 		}
 		inputs = append(inputs, profile.NodeInput{
@@ -383,11 +558,10 @@ func (s *Server) renderProfile(r *http.Request, profileID int64, target string) 
 		return render.Result{}, err
 	}
 	rows, err := s.Store.DB().QueryContext(r.Context(),
-		`SELECT n.raw_name, n.protocol, n.config, COALESCE(pn.name_override,''),
-		        CASE WHEN n.source_type='airport' THEN COALESCE((SELECT a.name FROM airport a WHERE a.id=n.source_id),'')
-		             ELSE COALESCE((SELECT sv.name FROM server sv WHERE sv.id=n.source_id),'') END
-		 FROM profile_node pn JOIN node n ON n.id=pn.node_id
-		 WHERE pn.profile_id=? AND n.enabled=1 ORDER BY pn.sort_order`, profileID)
+		`SELECT n.raw_name, n.protocol, n.config, COALESCE(i.name_override,''), `+sourceNameExpr+`
+		 FROM profile_item i `+itemSelectPath+`
+		 WHERE `+itemVisible+`
+		 ORDER BY i.sort_order, n.id`, profileID)
 	if err != nil {
 		return render.Result{}, err
 	}
@@ -506,3 +680,16 @@ func (s *Server) namingPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 var _ = fmt.Sprintf
+
+func (s *Server) listProfileItems(w http.ResponseWriter, r *http.Request) {
+	id, ok := requireID(w, r)
+	if !ok {
+		return
+	}
+	items, err := s.profileItems(r, id)
+	if err != nil {
+		fail(w, 500, "database_error", "读取编排选择失败")
+		return
+	}
+	writeJSON(w, 200, items)
+}

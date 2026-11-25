@@ -33,6 +33,10 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("initialize schema: %w", err)
 	}
+	if err = migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate schema: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 
@@ -87,4 +91,18 @@ func (s *Store) ReplaceWith(ctx context.Context, newPath, dbPath string) error {
 	}
 	s.db = reopened.db
 	return nil
+}
+
+// migrate moves data written by older versions into the current shape. Every
+// step must be idempotent: it runs on each start.
+func migrate(db *sql.DB) error {
+	// v1 → v2: per-node selection becomes profile_item(kind='node').
+	// profile_node is emptied after copying so the step is a no-op next time.
+	_, err := db.Exec(`
+BEGIN;
+INSERT OR IGNORE INTO profile_item(profile_id,kind,ref_id,source_type,sort_order,name_override)
+ SELECT profile_id,'node',node_id,'',sort_order,name_override FROM profile_node;
+DELETE FROM profile_node;
+COMMIT;`)
+	return err
 }

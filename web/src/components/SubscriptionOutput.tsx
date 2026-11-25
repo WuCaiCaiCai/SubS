@@ -5,6 +5,7 @@ import {
   Download,
   FileJson2,
   FileText,
+  FileArchive,
   Link2,
   Plane,
   QrCode,
@@ -107,6 +108,29 @@ export function SubscriptionOutput({
     }
   }
 
+  // 打包下载：三端配置 + README 打成一个 zip，给够不到这台机器的场景用。
+  const downloadBundle = async () => {
+    setBusy('bundle')
+    try {
+      const res = await fetch(`${url}/bundle.zip`, { credentials: 'omit' })
+      if (!res.ok) throw new Error(String(res.status))
+      const blob = await res.blob()
+      const href = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = href
+      a.download = `${(name || 'subs').replace(/[^\w\-.]/g, '') || 'subs'}-subs.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(href)
+      toast('success', '订阅包已开始下载')
+    } catch {
+      toast('error', '打包下载失败，请检查外部地址是否可访问')
+    } finally {
+      setBusy('')
+    }
+  }
+
   const importLinks = [
     {
       label: 'Clash / Mihomo',
@@ -191,6 +215,19 @@ export function SubscriptionOutput({
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={downloadBundle}
+            disabled={busy !== ''}
+            className="mt-1.5 flex w-full items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-accent/50 hover:bg-raised disabled:opacity-50"
+          >
+            {busy === 'bundle' ? <Spinner /> : <FileArchive size={15} className="shrink-0 text-accent" />}
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.75rem] font-medium text-fg-soft">打包下载订阅文件</span>
+              <span className="meta block">三端配置 + README 打成一个 zip，换到够不到本机的设备上用</span>
+            </span>
+            <Download size={14} className="shrink-0 text-fg-subtle" />
+          </button>
         </div>
 
         <details className="group">

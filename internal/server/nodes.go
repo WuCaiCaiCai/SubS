@@ -34,7 +34,9 @@ const nodeSelect = `SELECT n.id,n.source_type,n.source_id,n.protocol,n.raw_name,
        n.enabled,n.missing,n.is_new,COALESCE(n.tags,'[]'),
        CASE WHEN n.source_type='airport' THEN COALESCE((SELECT a.name FROM airport a WHERE a.id=n.source_id),'')
             ELSE COALESCE((SELECT s.name FROM server s WHERE s.id=n.source_id),'') END,
-       (SELECT count(*) FROM profile_node pn WHERE pn.node_id=n.id)
+       (SELECT count(DISTINCT i.profile_id) FROM profile_item i
+         WHERE (i.kind='node' AND i.ref_id=n.id)
+            OR (i.kind='source' AND i.source_type=n.source_type AND i.ref_id=n.source_id))
        FROM node n`
 
 func scanNode(rows interface{ Scan(...any) error }) (nodeView, error) {

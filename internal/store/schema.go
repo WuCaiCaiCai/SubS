@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS profile_node (
  sort_order INTEGER NOT NULL, name_override TEXT,
  PRIMARY KEY(profile_id,node_id)
 );
+-- profile_item 取代 profile_node：编排可以引用单个节点（kind='node'），
+-- 也可以引用整个来源（kind='source'），后者在渲染时展开成该来源的当前节点，
+-- 因此机场新增节点会自动进入已选整源的编排。
+CREATE TABLE IF NOT EXISTS profile_item (
+ profile_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL CHECK(kind IN ('node','source')),
+ ref_id INTEGER NOT NULL,
+ source_type TEXT NOT NULL DEFAULT '',
+ sort_order INTEGER NOT NULL,
+ name_override TEXT,
+ PRIMARY KEY(profile_id,kind,ref_id,source_type)
+);
+CREATE INDEX IF NOT EXISTS idx_profile_item_order ON profile_item(profile_id,sort_order);
+CREATE INDEX IF NOT EXISTS idx_profile_item_source ON profile_item(kind,source_type,ref_id);
 CREATE TABLE IF NOT EXISTS backup_record (
  id INTEGER PRIMARY KEY, sha256 TEXT NOT NULL UNIQUE, size_bytes INTEGER NOT NULL,
  downloaded_at TEXT, created_at TEXT NOT NULL

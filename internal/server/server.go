@@ -123,6 +123,7 @@ func (s *Server) Router() http.Handler {
 		r.Put("/api/profiles/{id}", s.csrf(s.updateProfile))
 		r.Delete("/api/profiles/{id}", s.csrf(s.deleteProfile))
 		r.Put("/api/profiles/{id}/nodes", s.csrf(s.setProfileNodes))
+		r.Get("/api/profiles/{id}/items", s.listProfileItems)
 		r.Post("/api/profiles/{id}/preview", s.csrf(s.previewProfile))
 		r.Post("/api/profiles/{id}/rotate-token", s.csrf(s.rotateToken))
 		r.Get("/api/profiles/{id}/naming-preview", s.namingPreview)
@@ -132,6 +133,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/destroy", s.csrf(s.destroy))
 	})
 	r.Get("/s/{token}", s.subscription)
+	r.Get("/s/{token}/bundle.zip", s.subscriptionBundle)
 	r.Get("/admin/*", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", http.StatusTemporaryRedirect) })
 	r.Get("/*", s.serveFrontend)
 	return r

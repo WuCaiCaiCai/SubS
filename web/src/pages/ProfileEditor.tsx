@@ -4,10 +4,12 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   GripVertical,
   Layers3,
   ListOrdered,
+  Minus,
   Plane,
   Search,
   Server,
@@ -20,6 +22,7 @@ import {
   ApiError,
   type NodeItem,
   type Profile,
+  type ProfileItem,
   type ProfileNode,
   type Template,
 } from '../lib/api'
@@ -55,7 +58,7 @@ export function ProfileEditorPage({
   const profile = useAsync(() => api.get<Profile>(`/api/profiles/${profileId}`))
   const templates = useAsync(() => api.get<Template[]>('/api/templates'))
   const [step, setStep] = useState<Step>(0)
-  const [selected, setSelected] = useState<number[]>([])
+  const [items, setItems] = useState<ProfileItem[]>([])
   const [overrides, setOverrides] = useState<Record<number, string>>({})
   const [profileNodes, setProfileNodes] = useState<ProfileNode[]>([])
   const [duplicates, setDuplicates] = useState<string[]>([])
@@ -76,14 +79,16 @@ export function ProfileEditorPage({
 
   const loadSelection = useCallback(async () => {
     try {
-      const res = await api.get<{ nodes: ProfileNode[]; duplicates: string[] }>(
+      const res = await api.get<ProfileItem[]>(`/api/profiles/${profileId}/items`)
+      setItems(res ?? [])
+      const nodes = await api.get<{ nodes: ProfileNode[]; duplicates: string[] }>(
         `/api/profiles/${profileId}/naming-preview`,
       )
-      const nodes = res.nodes ?? []
-      setProfileNodes(nodes)
-      setSelected(nodes.map((n) => n.nodeId))
+      setProfileNodes(nodes.nodes ?? [])
       const map: Record<number, string> = {}
-      for (const n of nodes) map[n.nodeId] = n.nameOverride
+      for (const it of res ?? []) {
+        if (it.kind === 'node' && it.nameOverride) map[it.refId] = it.nameOverride
+      }
       setOverrides(map)
     } catch {
       /* ignore */
@@ -94,13 +99,17 @@ export function ProfileEditorPage({
     void loadSelection()
   }, [loadSelection])
 
-  const saveNodes = async (ids: number[], ov?: Record<number, string>) => {
+  const saveItems = async (list: ProfileItem[], ov?: Record<number, string>) => {
     setError('')
     try {
-      const res = await api.put<ProfileNode[]>(
-        `/api/profiles/${profileId}/nodes`,
-        ids.map((nodeId) => ({ nodeId, nameOverride: ov?.[nodeId] ?? overrides[nodeId] ?? '' })),
-      )
+      const res = await api.put<ProfileNode[]>(`/api/profiles/${profileId}/nodes`, {
+        items: list.map((it) => ({
+          kind: it.kind,
+          refId: it.refId,
+          sourceType: it.sourceType,
+          nameOverride: it.kind === 'node' ? (ov?.[it.refId] ?? overrides[it.refId] ?? '') : '',
+        })),
+      })
       setProfileNodes(res)
       setSaved(true)
       window.setTimeout(() => setSaved(false), 1800)
@@ -169,10 +178,10 @@ export function ProfileEditorPage({
 
       {step === 0 && (
         <NodeSelectStep
-          selected={selected}
-          onChange={setSelected}
+          items={items}
+          onChange={setItems}
           onNext={async () => {
-            const ok = await saveNodes(selected)
+            const ok = await saveItems(items)
             if (ok) setStep(1)
           }}
         />
@@ -182,16 +191,17 @@ export function ProfileEditorPage({
         <NodeOrderStep
           profileId={profileId}
           nodes={profileNodes}
+          items={items}
           overrides={overrides}
           duplicates={duplicates}
           onOverrides={setOverrides}
-          onReorder={(ids) => setSelected(ids)}
+          onReorder={setItems}
           onRuleSaved={() => {
             profile.reload()
             void loadNaming()
           }}
           onSave={async () => {
-            const ok = await saveNodes(selected, overrides)
+            const ok = await saveItems(items, overrides)
             if (ok) {
               toast('success', '顺序与命名已保存')
               setStep(2)
@@ -222,45 +232,110 @@ function ProfileMeta({ profile }: { profile: Profile }) {
 }
 
 function NodeSelectStep({
-  selected,
+  items,
   onChange,
   onNext,
 }: {
-  selected: number[]
-  onChange: (ids: number[]) => void
+  items: ProfileItem[]
+  onChange: (items: ProfileItem[]) => void
   onNext: () => void
 }) {
   const nodes = useAsync(() => api.get<NodeItem[]>('/api/nodes'))
   const [q, setQ] = useState('')
-  const [source, setSource] = useState<string>('')
+  const [open, setOpen] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState(false)
 
-  const list = useMemo(() => {
-    let l = nodes.data ?? []
-    if (source) l = l.filter((n) => `${n.sourceType}:${n.sourceId}` === source)
-    if (q.trim()) {
-      const k = q.trim().toLowerCase()
-      l = l.filter((n) => n.rawName.toLowerCase().includes(k) || n.host.toLowerCase().includes(k))
-    }
-    return l
-  }, [nodes.data, source, q])
+  const key = (n: { sourceType: string; sourceId: number }) => `${n.sourceType}:${n.sourceId}`
+  const sourceItem = (k: string) =>
+    items.find((it) => it.kind === 'source' && `${it.sourceType}:${it.refId}` === k)
+  const nodeItem = (id: number) => items.find((it) => it.kind === 'node' && it.refId === id)
 
-  const sources = useMemo(() => {
-    const map = new Map<string, { label: string; type: 'airport' | 'server'; id: number }>()
+  const groups = useMemo(() => {
+    const k = q.trim().toLowerCase()
+    const map = new Map<
+      string,
+      { key: string; label: string; type: 'airport' | 'server'; id: number; nodes: NodeItem[] }
+    >()
     for (const n of nodes.data ?? []) {
-      map.set(`${n.sourceType}:${n.sourceId}`, {
+      const gk = key(n)
+      const hit =
+        !k || n.rawName.toLowerCase().includes(k) || n.host.toLowerCase().includes(k) || n.sourceName.toLowerCase().includes(k)
+      if (!hit) continue
+      const g = map.get(gk) ?? {
+        key: gk,
         label: n.sourceName,
         type: n.sourceType,
         id: n.sourceId,
-      })
+        nodes: [],
+      }
+      g.nodes.push(n)
+      map.set(gk, g)
     }
-    return [...map.entries()]
-  }, [nodes.data])
+    return [...map.values()]
+  }, [nodes.data, q])
 
-  const toggle = (id: number) => {
-    const next = selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]
-    onChange(next)
+  /** 一个节点是否被整源覆盖。 */
+  const covered = (n: NodeItem) => Boolean(sourceItem(key(n)))
+  /** 整源的三态：全选 / 部分 / 未选。 */
+  const sourceState = (g: { key: string; nodes: NodeItem[] }) => {
+    if (sourceItem(g.key)) return 'all' as const
+    const picked = g.nodes.filter((n) => nodeItem(n.id)).length
+    if (picked === 0) return 'none' as const
+    return picked === g.nodes.length ? 'all-nodes' as const : 'some' as const
   }
+
+  const toggleSource = (g: { key: string; label: string; type: 'airport' | 'server'; id: number; nodes: NodeItem[] }) => {
+    if (sourceItem(g.key)) {
+      // 取消整源：同时丢掉这些节点的单点选择，语义才符合“都不要”
+      const ids = new Set(g.nodes.map((n) => n.id))
+      onChange(items.filter((it) => !(it.kind === 'source' && `${it.sourceType}:${it.refId}` === g.key) && !(it.kind === 'node' && ids.has(it.refId))))
+      return
+    }
+    // 选中整源时丢掉该来源下已单点选中的节点，避免重复计数与冗余条目
+    const ids = new Set(g.nodes.map((n) => n.id))
+    onChange([
+      ...items.filter(
+        (it) =>
+          !(it.kind === 'source' && `${it.sourceType}:${it.refId}` === g.key) &&
+          !(it.kind === 'node' && ids.has(it.refId)),
+      ),
+      { kind: 'source', refId: g.id, sourceType: g.type, nameOverride: '', sortOrder: items.length, label: g.label, protocol: '', nodeCount: g.nodes.length },
+    ])
+  }
+
+  const toggleNode = (n: NodeItem) => {
+    if (covered(n)) return
+    onChange(
+      nodeItem(n.id)
+        ? items.filter((it) => !(it.kind === 'node' && it.refId === n.id))
+        : [
+            ...items,
+            {
+              kind: 'node',
+              refId: n.id,
+              sourceType: '',
+              nameOverride: '',
+              sortOrder: items.length,
+              label: n.rawName,
+              protocol: n.protocol,
+              nodeCount: 1,
+            },
+          ],
+    )
+  }
+
+  const selectedCount = useMemo(() => {
+    const coveredIds = new Set<number>()
+    for (const it of items) {
+      if (it.kind !== 'source') continue
+      for (const n of nodes.data ?? []) {
+        if (key(n) === `${it.sourceType}:${it.refId}`) coveredIds.add(n.id)
+      }
+    }
+    const explicit = items.filter((it) => it.kind === 'node' && !coveredIds.has(it.refId)).length
+    return coveredIds.size + explicit
+  }, [items, nodes.data])
+  const sourceCount = items.filter((it) => it.kind === 'source').length
 
   return (
     <section className="space-y-3">
@@ -269,26 +344,22 @@ function NodeSelectStep({
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-muted" />
           <input
             className="input pl-8"
-            placeholder="搜索节点名或地址…"
+            placeholder="搜索来源、节点名或地址…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
-        <div className="relative">
-          <select
-            aria-label="按来源筛选"
-            className="input h-11 w-[150px] appearance-none pr-7 md:h-10"
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className="btn btn-ghost h-10"
+            onClick={() => setOpen(Object.fromEntries(groups.map((g) => [g.key, true])))}
           >
-            <option value="">全部来源</option>
-            {sources.map(([key, s]) => (
-              <option key={key} value={key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-fg-muted" />
+            全部展开
+          </button>
+          <button type="button" className="btn btn-ghost h-10" onClick={() => setOpen({})}>
+            收起
+          </button>
         </div>
       </div>
 
@@ -296,55 +367,111 @@ function NodeSelectStep({
         <SkeletonRows rows={6} />
       ) : nodes.error ? (
         <ErrorNote>{nodes.error.message}</ErrorNote>
-      ) : list.length === 0 ? (
+      ) : groups.length === 0 ? (
         <EmptyState
           icon={<Sparkles size={18} />}
-          title="没有可选择的节点"
-          description="先到「来源」添加机场并刷新，或为自建 VPS 导入节点。"
+          title={q ? '没有匹配的节点' : '没有可选择的节点'}
+          description={q ? '换个关键词，或清空搜索看全部来源。' : '先到「来源」添加机场并刷新，或为自建 VPS 导入节点。'}
         />
       ) : (
         <ul className="divide-y divide-line/70 overflow-hidden rounded-lg border border-line">
-          {list.map((n) => {
-            const checked = selected.includes(n.id)
+          {groups.map((g) => {
+            const state = sourceState(g)
+            const expanded = open[g.key] ?? Boolean(q.trim())
+            const partial = state === 'some'
+            const all = state === 'all' || state === 'all-nodes'
             return (
-              <li key={n.id} className="flex items-center gap-2.5 px-3 py-2">
-                <input
-                  type="checkbox"
-                  aria-label={`选择 ${n.rawName}`}
-                  checked={checked}
-                  onChange={() => toggle(n.id)}
-                  className="h-4 w-4 shrink-0"
-                />
-                <span
-                  aria-hidden
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                    n.sourceType === 'airport' ? 'bg-[var(--airport-accent)]' : 'bg-[var(--server-accent)]'
-                  }`}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="mono truncate text-[0.7812rem] text-fg">{n.rawName}</div>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <ProtocolBadge protocol={n.protocol} />
-                    <span className="mono truncate text-[0.6562rem] text-fg-muted">
-                      {n.host}:{n.portRange || n.port}
+              <li key={g.key}>
+                <div className="flex items-center gap-2.5 bg-surface/40 px-3 py-2.5">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={partial ? 'mixed' : all}
+                    aria-label={`整源选择 ${g.label}`}
+                    onClick={() => toggleSource(g)}
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                      all || partial ? 'border-accent bg-accent text-canvas' : 'border-line-strong hover:border-fg-subtle'
+                    }`}
+                  >
+                    {state === 'all' ? <Check size={11} strokeWidth={3} /> : partial ? <Minus size={11} strokeWidth={3} /> : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen({ ...open, [g.key]: !expanded })}
+                    aria-expanded={expanded}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    {expanded ? (
+                      <ChevronDown size={13} className="shrink-0 text-fg-subtle" />
+                    ) : (
+                      <ChevronRight size={13} className="shrink-0 text-fg-subtle" />
+                    )}
+                    <span
+                      aria-hidden
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        g.type === 'airport' ? 'bg-[var(--airport-accent)]' : 'bg-[var(--server-accent)]'
+                      }`}
+                    />
+                    <span className="truncate text-strong font-medium text-fg">{g.label}</span>
+                    <span className="mono shrink-0 text-meta text-fg-subtle">
+                      {g.type === 'airport' ? '机场' : 'VPS'} · {g.nodes.length}
                     </span>
-                  </div>
+                    {state === 'all' && <Badge tone="cyan">整源</Badge>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleSource(g)}
+                    className="shrink-0 text-meta text-accent-strong hover:underline"
+                  >
+                    {state === 'all' ? '取消整源' : '整源全选'}
+                  </button>
                 </div>
-                <span className="hidden shrink-0 text-[0.6875rem] text-fg-subtle sm:inline">{n.sourceName}</span>
-                {n.missing && <Badge tone="neutral">缺失</Badge>}
-                {!n.enabled && <Badge tone="neutral">停用</Badge>}
+                {expanded && (
+                  <ul className="divide-y divide-line/50">
+                    {g.nodes.map((n) => {
+                      const checked = Boolean(nodeItem(n.id)) || covered(n)
+                      const locked = covered(n)
+                      return (
+                        <li key={n.id} className="flex items-center gap-2.5 py-2 pl-9 pr-3">
+                          <input
+                            type="checkbox"
+                            aria-label={`选择 ${n.rawName}`}
+                            checked={checked}
+                            disabled={locked || n.missing || !n.enabled}
+                            onChange={() => toggleNode(n)}
+                            className="h-4 w-4 shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="mono truncate text-[0.8125rem] text-fg-soft">{n.rawName}</div>
+                            <div className="mt-0.5 flex items-center gap-2">
+                              <ProtocolBadge protocol={n.protocol} />
+                              <span className="mono truncate text-meta text-fg-muted">
+                                {n.host}:{n.portRange || n.port}
+                              </span>
+                            </div>
+                          </div>
+                          {locked && <span className="shrink-0 text-meta text-fg-subtle">随整源</span>}
+                          {n.missing && <Badge tone="neutral">缺失</Badge>}
+                          {!n.enabled && <Badge tone="neutral">停用</Badge>}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </li>
             )
           })}
         </ul>
       )}
 
-      <div className="flex items-center justify-between border-t border-line pt-3">
-        <span className="mono text-[0.75rem] text-fg-muted">已选 {selected.length} 个节点</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+        <span className="mono text-[0.75rem] text-fg-muted">
+          已选 {selectedCount} 个节点{sourceCount > 0 ? ` · ${sourceCount} 个整源` : ''}
+        </span>
         <button
           type="button"
           className="btn btn-primary"
-          disabled={selected.length === 0}
+          disabled={items.length === 0}
           onClick={async () => {
             setBusy(true)
             await onNext()
@@ -361,6 +488,7 @@ function NodeSelectStep({
 
 function NodeOrderStep({
   profileId,
+  items,
   nodes,
   overrides,
   duplicates,
@@ -370,23 +498,47 @@ function NodeOrderStep({
   onRuleSaved,
 }: {
   profileId: number
+  items: ProfileItem[]
   nodes: ProfileNode[]
   overrides: Record<number, string>
   duplicates: string[]
   onOverrides: (v: Record<number, string>) => void
-  onReorder: (ids: number[]) => void
+  onReorder: (items: ProfileItem[]) => void
   onSave: () => void
   onRuleSaved: () => void
 }) {
   const [rule, setRule] = useState({ segments: 'index,region,protocol,rawName', separator: '-', zeroPad: 2, upperProtocol: true })
   const [savingRule, setSavingRule] = useState(false)
 
-  const ids = useMemo(() => nodes.map((n) => n.nodeId), [nodes])
+  // 展开成展示行：整源一行块头 + 其下节点，单节点各一行；排序只动 items。
+  const rows = useMemo(() => {
+    const byId = new Map(nodes.map((n) => [n.nodeId, n]))
+    const bySource = new Map<string, ProfileNode[]>()
+    for (const n of nodes) {
+      const k = `${n.sourceType}:${n.sourceId}`
+      const list = bySource.get(k) ?? []
+      list.push(n)
+      bySource.set(k, list)
+    }
+    const out: { type: 'item' | 'child'; item: ProfileItem; node?: ProfileNode; index: number }[] = []
+    items.forEach((it, index) => {
+      if (it.kind === 'node') {
+        const n = byId.get(it.refId)
+        if (n) out.push({ type: 'item', item: it, node: n, index })
+        return
+      }
+      out.push({ type: 'item', item: it, index })
+      for (const n of bySource.get(`${it.sourceType}:${it.refId}`) ?? []) {
+        out.push({ type: 'child', item: it, node: n, index })
+      }
+    })
+    return out
+  }, [items, nodes])
 
   const move = (index: number, dir: -1 | 1) => {
-    const next = [...ids]
     const target = index + dir
-    if (target < 0 || target >= next.length) return
+    if (target < 0 || target >= items.length) return
+    const next = [...items]
     ;[next[index], next[target]] = [next[target], next[index]]
     onReorder(next)
   }
@@ -410,49 +562,81 @@ function NodeOrderStep({
     }
   }
 
+  const explicit = items.filter((it) => it.kind === 'node')
+  let seq = 0
+
   return (
-    <section className="grid gap-4 lg:grid-cols-[1fr_260px]">
+    <section className="grid gap-4 lg:grid-cols-[1fr_280px]">
       <div className="space-y-2">
-        {nodes.length === 0 ? (
-          <EmptyState
-            icon={<ListOrdered size={18} />}
-            title="还没有节点"
-            description="回到第 1 步挑选节点。"
-          />
+        {items.length === 0 ? (
+          <EmptyState icon={<ListOrdered size={18} />} title="还没有节点" description="回到第 1 步挑选节点。" />
         ) : (
           <ul className="divide-y divide-line/70 overflow-hidden rounded-lg border border-line">
-            {nodes.map((n, i) => (
-              <li key={n.nodeId} className="flex items-center gap-2 px-2.5 py-2">
-                <span className="mono w-6 shrink-0 text-center text-[0.6875rem] text-fg-subtle">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="mono truncate text-[0.75rem] text-fg-muted">{n.rawName}</div>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <span className="mono truncate text-[0.75rem] text-accent-strong/90">{n.outputName}</span>
-                    {duplicates.includes(n.outputName) && <Badge tone="amber">重名</Badge>}
+            {rows.map((row) => {
+              if (row.type === 'child') {
+                seq += 1
+                const n = row.node!
+                return (
+                  <li key={`${row.item.kind}-${row.item.refId}-${n.nodeId}`} className="flex items-center gap-2 py-2 pl-11 pr-2.5">
+                    <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
+                      {String(seq).padStart(2, '0')}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="mono truncate text-[0.75rem] text-fg-soft">{n.rawName}</div>
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <span className="mono truncate text-[0.75rem] text-accent-strong/90">{n.outputName}</span>
+                        {duplicates.includes(n.outputName) && <Badge tone="amber">重名</Badge>}
+                      </div>
+                    </div>
+                  </li>
+                )
+              }
+              const isSource = row.item.kind === 'source'
+              if (!isSource) seq += 1
+              return (
+                <li key={`${row.item.kind}-${row.item.refId}`} className={`flex items-center gap-2 px-2.5 py-2 ${isSource ? 'bg-surface/40' : ''}`}>
+                  {isSource ? (
+                    <Layers3 size={13} className="ml-1 shrink-0 text-accent" />
+                  ) : (
+                    <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
+                      {String(seq).padStart(2, '0')}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className={`truncate ${isSource ? 'text-strong font-medium text-fg' : 'mono text-[0.75rem] text-fg-soft'}`}>
+                      {isSource ? row.item.label : row.node?.rawName}
+                    </div>
+                    {!isSource && (
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <span className="mono truncate text-[0.75rem] text-accent-strong/90">{row.node?.outputName}</span>
+                        {row.node && duplicates.includes(row.node.outputName) && <Badge tone="amber">重名</Badge>}
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-0.5">
-                  <button
-                    type="button"
-                    aria-label="上移"
-                    onClick={() => move(i, -1)}
-                    className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg"
-                  >
-                    <ChevronUp size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="下移"
-                    onClick={() => move(i, 1)}
-                    className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg"
-                  >
-                    <ChevronDown size={13} />
-                  </button>
-                </div>
-              </li>
-            ))}
+                  {isSource && <Badge tone="cyan">整源 {row.item.nodeCount || ''}</Badge>}
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <button
+                      type="button"
+                      aria-label={isSource ? `整源上移 ${row.item.label}` : '上移'}
+                      disabled={row.index === 0}
+                      onClick={() => move(row.index, -1)}
+                      className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+                    >
+                      <ChevronUp size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={isSource ? `整源下移 ${row.item.label}` : '下移'}
+                      disabled={row.index === items.length - 1}
+                      onClick={() => move(row.index, 1)}
+                      className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+                    >
+                      <ChevronDown size={13} />
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
         <div className="flex items-center justify-end">
@@ -472,9 +656,7 @@ function NodeOrderStep({
               value={rule.segments}
               onChange={(e) => setRule({ ...rule, segments: e.target.value })}
             />
-            <span className="block text-[0.6562rem] text-fg-subtle">
-              可选：index / region / protocol / rawName
-            </span>
+            <span className="block text-[0.6562rem] text-fg-subtle">可选：index / region / protocol / rawName</span>
           </label>
           <label className="block space-y-1">
             <span className="text-[0.7188rem] text-fg-muted">分隔符</span>
@@ -511,19 +693,25 @@ function NodeOrderStep({
 
         <div className="card p-3.5">
           <SectionLabel>单节点改名</SectionLabel>
-          <p className="mt-1 text-[0.6875rem] text-fg-muted">在第 1 步之后，可在预览里逐个覆盖名称。</p>
+          <p className="mt-1 text-[0.6875rem] text-fg-muted">
+            只对逐个挑选的节点生效；整源里的节点沿用自动命名。
+          </p>
           <div className="mt-2 space-y-1.5">
-            {nodes.slice(0, 8).map((n) => (
-              <div key={n.nodeId} className="space-y-1">
-                <span className="mono block truncate text-[0.6562rem] text-fg-muted">{n.rawName}</span>
-                <input
-                  className="input mono h-8 text-[0.7188rem]"
-                  placeholder={n.outputName}
-                  value={overrides[n.nodeId] ?? ''}
-                  onChange={(e) => onOverrides({ ...overrides, [n.nodeId]: e.target.value })}
-                />
-              </div>
-            ))}
+            {explicit.length === 0 && <p className="text-[0.6875rem] text-fg-subtle">当前没有单独挑选的节点。</p>}
+            {explicit.slice(0, 8).map((it) => {
+              const n = nodes.find((x) => x.nodeId === it.refId)
+              return (
+                <div key={it.refId} className="space-y-1">
+                  <span className="mono block truncate text-[0.6562rem] text-fg-muted">{n?.rawName ?? it.label}</span>
+                  <input
+                    className="input mono h-8 text-[0.7188rem]"
+                    placeholder={n?.outputName ?? ''}
+                    value={overrides[it.refId] ?? ''}
+                    onChange={(e) => onOverrides({ ...overrides, [it.refId]: e.target.value })}
+                  />
+                </div>
+              )
+            })}
           </div>
         </div>
       </aside>

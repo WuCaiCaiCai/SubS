@@ -196,8 +196,10 @@ func (s *Server) deleteAirport(w http.ResponseWriter, r *http.Request) {
 	force := r.URL.Query().Get("force") == "1"
 	var refs int
 	if err := s.Store.DB().QueryRowContext(r.Context(),
-		`SELECT count(*) FROM node n JOIN profile_node pn ON pn.node_id=n.id
-		 WHERE n.source_type='airport' AND n.source_id=?`, id).Scan(&refs); err != nil {
+		`SELECT count(*) FROM profile_item i WHERE
+		   (i.kind='source' AND i.source_type='airport' AND i.ref_id=?)
+		   OR (i.kind='node' AND i.ref_id IN
+		       (SELECT id FROM node WHERE source_type='airport' AND source_id=?))`, id, id).Scan(&refs); err != nil {
 		fail(w, 500, "database_error", "检查机场引用失败")
 		return
 	}
@@ -208,10 +210,16 @@ func (s *Server) deleteAirport(w http.ResponseWriter, r *http.Request) {
 	}
 	err = s.Store.Write(r.Context(), func(tx *sql.Tx) error {
 		if force {
-			if _, err := tx.ExecContext(r.Context(),
+			for _, q := range []string{
+				`DELETE FROM profile_item WHERE kind='source' AND source_type='airport' AND ref_id=?`,
 				`DELETE FROM profile_node WHERE node_id IN
-				 (SELECT id FROM node WHERE source_type='airport' AND source_id=?)`, id); err != nil {
-				return err
+				 (SELECT id FROM node WHERE source_type='airport' AND source_id=?)`,
+				`DELETE FROM profile_item WHERE kind='node' AND ref_id IN
+				 (SELECT id FROM node WHERE source_type='airport' AND source_id=?)`,
+			} {
+				if _, err := tx.ExecContext(r.Context(), q, id); err != nil {
+					return err
+				}
 			}
 		}
 		if _, err := tx.ExecContext(r.Context(),

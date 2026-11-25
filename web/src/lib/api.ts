@@ -148,6 +148,19 @@ export interface Profile {
   lastFetchAt: string
   nodeCount: number
   url: string
+  items?: ProfileItem[]
+}
+
+/** 编排选择项：单节点（kind=node）或整源（kind=source，渲染时展开）。 */
+export interface ProfileItem {
+  kind: 'node' | 'source'
+  refId: number
+  sourceType: '' | 'airport' | 'server'
+  nameOverride: string
+  sortOrder: number
+  label: string
+  protocol: string
+  nodeCount: number
 }
 
 export interface NamingRule {
@@ -163,6 +176,8 @@ export interface ProfileNode {
   sortOrder: number
   rawName: string
   protocol: Protocol
+  sourceType: 'airport' | 'server'
+  sourceId: number
   sourceName: string
   outputName: string
 }
