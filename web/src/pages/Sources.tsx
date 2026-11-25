@@ -120,8 +120,8 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <SectionLabel>workspace / sources</SectionLabel>
-          <h1 className="mt-1 text-base font-semibold tracking-tight">来源管理</h1>
-          <p className="mt-1 text-[12.5px] text-zinc-500">
+          <h1 className="mt-1 text-page font-semibold tracking-tight">来源管理</h1>
+          <p className="mt-1 text-[0.7812rem] text-fg-muted">
             机场订阅与自建 VPS 是两类平级来源，节点都会汇入节点库。
           </p>
         </div>
@@ -134,7 +134,7 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
         </button>
       </header>
 
-      <div role="tablist" aria-label="来源类型" className="flex gap-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-1">
+      <div role="tablist" aria-label="来源类型" className="flex gap-1 rounded-lg border border-line bg-surface/50 p-1">
         <TabButton
           active={tab === 'airport'}
           onClick={() => setTab('airport')}
@@ -180,20 +180,20 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
                     style={{ background: 'var(--airport-accent)' }}
                   />
                   <div className="flex flex-wrap items-center gap-3 px-4 py-3 pl-4">
-                    <Plane size={15} className="shrink-0 text-sky-300" aria-hidden />
+                    <Plane size={15} className="shrink-0 text-info" aria-hidden />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="truncate text-[13px] font-medium text-zinc-100">{a.name}</span>
+                        <span className="truncate text-[0.8125rem] font-medium text-fg">{a.name}</span>
                         {!a.enabled && <Badge tone="neutral">停用</Badge>}
                       </div>
-                      <div className="mono mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-zinc-500">
+                      <div className="mono mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.6875rem] text-fg-muted">
                         <span>{a.nodeCount} 节点</span>
-                        <span className="text-zinc-700">·</span>
+                        <span className="text-fg-subtle">·</span>
                         <span title={a.lastOkAt || ''}>更新 {relativeTime(a.lastOkAt)}</span>
                         {a.lastError && (
                           <>
-                            <span className="text-zinc-700">·</span>
-                            <span className="truncate text-red-300" title={a.lastError}>
+                            <span className="text-fg-subtle">·</span>
+                            <span className="truncate text-danger" title={a.lastError}>
                               {a.lastError}
                             </span>
                           </>
@@ -252,16 +252,16 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
                     style={{ background: 'var(--server-accent)' }}
                   />
                   <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-                    <Server size={15} className="shrink-0 text-orange-300" aria-hidden />
+                    <Server size={15} className="shrink-0 text-warning" aria-hidden />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-medium text-zinc-100">{v.name}</div>
-                      <div className="mono mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-zinc-500">
+                      <div className="truncate text-[0.8125rem] font-medium text-fg">{v.name}</div>
+                      <div className="mono mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.6875rem] text-fg-muted">
                         {v.address && <span className="truncate">{v.address}</span>}
-                        {v.address && <span className="text-zinc-700">·</span>}
+                        {v.address && <span className="text-fg-subtle">·</span>}
                         <span>{v.nodeCount} 节点</span>
                         {v.note && (
                           <>
-                            <span className="text-zinc-700">·</span>
+                            <span className="text-fg-subtle">·</span>
                             <span className="truncate">{v.note}</span>
                           </>
                         )}
@@ -330,7 +330,7 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
           </>
         }
       >
-        <p className="text-[12.5px] text-zinc-400">此操作不可撤销，请确认后继续。</p>
+        <p className="text-[0.7812rem] text-fg-muted">此操作不可撤销，请确认后继续。</p>
       </Modal>
     </div>
   )
@@ -357,13 +357,13 @@ function TabButton({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`flex h-9 flex-1 items-center justify-center gap-2 rounded-md text-[12.5px] transition-colors ${
-        active ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+      className={`flex h-9 flex-1 items-center justify-center gap-2 rounded-md text-[0.7812rem] transition-colors ${
+        active ? 'bg-raised text-fg' : 'text-fg-muted hover:text-fg-soft'
       }`}
     >
       <span style={{ color: active ? accent : undefined }}>{icon}</span>
       {label}
-      <span className="mono text-[11px] text-zinc-500">{count}</span>
+      <span className="mono text-[0.6875rem] text-fg-muted">{count}</span>
     </button>
   )
 }
@@ -385,8 +385,8 @@ function IconButton({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={`flex h-9 w-9 items-center justify-center rounded border border-transparent transition-colors hover:border-zinc-700 hover:bg-zinc-800/60 ${
-        danger ? 'text-zinc-500 hover:text-red-300' : 'text-zinc-500 hover:text-zinc-200'
+      className={`flex h-9 w-9 items-center justify-center rounded border border-transparent transition-colors hover:border-line-strong hover:bg-raised/60 ${
+        danger ? 'text-fg-muted hover:text-danger' : 'text-fg-muted hover:text-fg'
       }`}
     >
       {children}
@@ -466,11 +466,11 @@ function AirportForm({
     >
       <form id="airport-form" onSubmit={submit} className="space-y-3.5">
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">名称</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">名称</span>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} required placeholder="例如：主力机场" />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">订阅链接</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">订阅链接</span>
           <textarea
             className="input mono h-20 resize-y py-2 break-all"
             value={url}
@@ -478,16 +478,16 @@ function AirportForm({
             required
             placeholder="https://example.com/api/v1/client/subscribe?token=…"
           />
-          <span className="block text-[11.5px] text-zinc-500">
+          <span className="block text-[0.7188rem] text-fg-muted">
             {editing?.url?.includes('***') ? '留空或保留遮蔽值表示不修改链接' : '地址含凭据，将加密存储'}
           </span>
         </label>
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">备注（可选）</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">备注（可选）</span>
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
         {editing && (
-          <label className="flex items-center gap-2 text-[12.5px] text-zinc-300">
+          <label className="flex items-center gap-2 text-[0.7812rem] text-fg-soft">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4" />
             启用（停用后该来源节点不参与订阅输出）
           </label>
@@ -562,15 +562,15 @@ function ServerForm({
     >
       <form id="server-form" onSubmit={submit} className="space-y-3.5">
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">分组名称</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">分组名称</span>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} required placeholder="例如：东京 BGP" />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">服务器地址（可选）</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">服务器地址（可选）</span>
           <input className="input mono" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="jp.example.com" />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">备注（可选）</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">备注（可选）</span>
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
         {error && <ErrorNote>{error}</ErrorNote>}
@@ -619,18 +619,18 @@ function RefreshDialog({
     >
       <div className="grid grid-cols-4 gap-2">
         {summary.map((s) => (
-          <div key={s.label} className="rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-2.5 text-center">
-            <div className="mono text-lg font-semibold text-zinc-100">{s.value}</div>
-            <div className="text-[11px] text-zinc-500">{s.label}</div>
+          <div key={s.label} className="rounded-md border border-line bg-canvas/60 px-2 py-2.5 text-center">
+            <div className="mono text-lg font-semibold text-fg">{s.value}</div>
+            <div className="text-[0.6875rem] text-fg-muted">{s.label}</div>
           </div>
         ))}
       </div>
       {errors.length > 0 && (
         <div className="mt-3 space-y-1.5">
-          <div className="flex items-center gap-1.5 text-[12px] text-amber-300">
+          <div className="flex items-center gap-1.5 text-[0.75rem] text-warning">
             <AlertTriangle size={12} /> {errors.length} 行解析失败（已跳过）
           </div>
-          <ul className="mono max-h-40 space-y-1 overflow-y-auto rounded border border-zinc-800 bg-zinc-950/60 p-2 text-[11.5px] text-zinc-400">
+          <ul className="mono max-h-40 space-y-1 overflow-y-auto rounded border border-line bg-canvas/60 p-2 text-[0.7188rem] text-fg-muted">
             {errors.slice(0, 50).map((e, i) => (
               <li key={i}>
                 第 {e.line} 行：{e.reason}

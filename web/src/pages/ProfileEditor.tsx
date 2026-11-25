@@ -5,21 +5,16 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  Copy,
   GripVertical,
-  KeyRound,
   Layers3,
   ListOrdered,
   Plane,
-  QrCode,
-  RotateCw,
   Search,
   Server,
   ShieldCheck,
   Sparkles,
   Trash2,
 } from 'lucide-react'
-import QRCode from 'qrcode'
 import {
   api,
   ApiError,
@@ -28,18 +23,19 @@ import {
   type ProfileNode,
   type Template,
 } from '../lib/api'
-import { copyText, relativeTime, toast, useAsync } from '../lib/hooks'
+import { relativeTime, toast, useAsync } from '../lib/hooks'
 import {
   Badge,
   CopyButton,
   EmptyState,
   ErrorNote,
-  Modal,
   ProtocolBadge,
   SectionLabel,
   SkeletonRows,
   Spinner,
 } from '../components/ui'
+import { CodeEditor } from '../components/CodeEditor'
+import { SubscriptionOutput } from '../components/SubscriptionOutput'
 
 const STEPS = [
   { key: 'select', label: '选择节点', icon: ListOrdered },
@@ -127,16 +123,16 @@ export function ProfileEditorPage({
           <button
             type="button"
             onClick={() => onNavigate('/profiles')}
-            className="mb-1.5 inline-flex items-center gap-1 text-[12px] text-zinc-500 hover:text-zinc-300"
+            className="mb-1.5 inline-flex items-center gap-1 text-[0.75rem] text-fg-muted hover:text-fg-soft"
           >
             <ArrowLeft size={12} /> 返回编排列表
           </button>
           <SectionLabel>profile / {p.id}</SectionLabel>
-          <h1 className="mt-1 truncate text-base font-semibold tracking-tight">{p.name}</h1>
+          <h1 className="mt-1 truncate text-page font-semibold tracking-tight">{p.name}</h1>
         </div>
         <div className="flex items-center gap-2">
           {saved && (
-            <span className="flex items-center gap-1 text-[12px] text-emerald-300">
+            <span className="flex items-center gap-1 text-[0.75rem] text-success">
               <Check size={13} /> 已保存
             </span>
           )}
@@ -144,7 +140,7 @@ export function ProfileEditorPage({
         </div>
       </header>
 
-      <ol className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/40 p-1">
+      <ol className="flex items-center gap-1 rounded-lg border border-line bg-surface/40 p-1">
         {STEPS.map((s, i) => {
           const active = step === i
           const done = step > i
@@ -154,16 +150,16 @@ export function ProfileEditorPage({
                 type="button"
                 onClick={() => setStep(i as Step)}
                 aria-current={active ? 'step' : undefined}
-                className={`flex h-9 flex-1 items-center justify-center gap-2 rounded-md text-[12.5px] transition-colors ${
-                  active ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                className={`flex h-9 flex-1 items-center justify-center gap-2 rounded-md text-[0.7812rem] transition-colors ${
+                  active ? 'bg-raised text-fg' : 'text-fg-muted hover:text-fg-soft'
                 }`}
               >
-                <s.icon size={13} className={active ? 'text-cyan-300' : ''} />
+                <s.icon size={13} className={active ? 'text-accent' : ''} />
                 <span className="hidden sm:inline">{s.label}</span>
-                <span className="mono text-[10.5px] text-zinc-600">{i + 1}</span>
-                {done && <Check size={12} className="text-emerald-400" />}
+                <span className="mono text-[0.6562rem] text-fg-subtle">{i + 1}</span>
+                {done && <Check size={12} className="text-success" />}
               </button>
-              {i < STEPS.length - 1 && <span className="mx-1 h-px w-3 bg-zinc-800 sm:w-6" aria-hidden />}
+              {i < STEPS.length - 1 && <span className="mx-1 h-px w-3 bg-raised sm:w-6" aria-hidden />}
             </li>
           )
         })}
@@ -220,7 +216,7 @@ function ProfileMeta({ profile }: { profile: Profile }) {
   return (
     <div className="flex items-center gap-2">
       <Badge tone={profile.enabled ? 'emerald' : 'neutral'}>{profile.enabled ? '启用中' : '已停用'}</Badge>
-      <span className="mono text-[11px] text-zinc-500">拉取 {relativeTime(profile.lastFetchAt)}</span>
+      <span className="mono text-[0.6875rem] text-fg-muted">拉取 {relativeTime(profile.lastFetchAt)}</span>
     </div>
   )
 }
@@ -270,7 +266,7 @@ function NodeSelectStep({
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-0 flex-1">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-muted" />
           <input
             className="input pl-8"
             placeholder="搜索节点名或地址…"
@@ -292,7 +288,7 @@ function NodeSelectStep({
               </option>
             ))}
           </select>
-          <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-fg-muted" />
         </div>
       </div>
 
@@ -307,7 +303,7 @@ function NodeSelectStep({
           description="先到「来源」添加机场并刷新，或为自建 VPS 导入节点。"
         />
       ) : (
-        <ul className="divide-y divide-zinc-800/70 overflow-hidden rounded-lg border border-zinc-800">
+        <ul className="divide-y divide-line/70 overflow-hidden rounded-lg border border-line">
           {list.map((n) => {
             const checked = selected.includes(n.id)
             return (
@@ -326,15 +322,15 @@ function NodeSelectStep({
                   }`}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="mono truncate text-[12.5px] text-zinc-100">{n.rawName}</div>
+                  <div className="mono truncate text-[0.7812rem] text-fg">{n.rawName}</div>
                   <div className="mt-0.5 flex items-center gap-2">
                     <ProtocolBadge protocol={n.protocol} />
-                    <span className="mono truncate text-[10.5px] text-zinc-500">
+                    <span className="mono truncate text-[0.6562rem] text-fg-muted">
                       {n.host}:{n.portRange || n.port}
                     </span>
                   </div>
                 </div>
-                <span className="hidden shrink-0 text-[11px] text-zinc-600 sm:inline">{n.sourceName}</span>
+                <span className="hidden shrink-0 text-[0.6875rem] text-fg-subtle sm:inline">{n.sourceName}</span>
                 {n.missing && <Badge tone="neutral">缺失</Badge>}
                 {!n.enabled && <Badge tone="neutral">停用</Badge>}
               </li>
@@ -343,8 +339,8 @@ function NodeSelectStep({
         </ul>
       )}
 
-      <div className="flex items-center justify-between border-t border-zinc-800 pt-3">
-        <span className="mono text-[12px] text-zinc-500">已选 {selected.length} 个节点</span>
+      <div className="flex items-center justify-between border-t border-line pt-3">
+        <span className="mono text-[0.75rem] text-fg-muted">已选 {selected.length} 个节点</span>
         <button
           type="button"
           className="btn btn-primary"
@@ -424,16 +420,16 @@ function NodeOrderStep({
             description="回到第 1 步挑选节点。"
           />
         ) : (
-          <ul className="divide-y divide-zinc-800/70 overflow-hidden rounded-lg border border-zinc-800">
+          <ul className="divide-y divide-line/70 overflow-hidden rounded-lg border border-line">
             {nodes.map((n, i) => (
               <li key={n.nodeId} className="flex items-center gap-2 px-2.5 py-2">
-                <span className="mono w-6 shrink-0 text-center text-[11px] text-zinc-600">
+                <span className="mono w-6 shrink-0 text-center text-[0.6875rem] text-fg-subtle">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="mono truncate text-[12px] text-zinc-400">{n.rawName}</div>
+                  <div className="mono truncate text-[0.75rem] text-fg-muted">{n.rawName}</div>
                   <div className="mt-0.5 flex items-center gap-1.5">
-                    <span className="mono truncate text-[12px] text-cyan-200/90">{n.outputName}</span>
+                    <span className="mono truncate text-[0.75rem] text-accent-strong/90">{n.outputName}</span>
                     {duplicates.includes(n.outputName) && <Badge tone="amber">重名</Badge>}
                   </div>
                 </div>
@@ -442,7 +438,7 @@ function NodeOrderStep({
                     type="button"
                     aria-label="上移"
                     onClick={() => move(i, -1)}
-                    className="flex h-7 w-7 items-center justify-center rounded text-zinc-600 hover:bg-zinc-800 hover:text-zinc-200"
+                    className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg"
                   >
                     <ChevronUp size={13} />
                   </button>
@@ -450,7 +446,7 @@ function NodeOrderStep({
                     type="button"
                     aria-label="下移"
                     onClick={() => move(i, 1)}
-                    className="flex h-7 w-7 items-center justify-center rounded text-zinc-600 hover:bg-zinc-800 hover:text-zinc-200"
+                    className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg"
                   >
                     <ChevronDown size={13} />
                   </button>
@@ -470,36 +466,36 @@ function NodeOrderStep({
         <div className="card space-y-3 p-3.5">
           <SectionLabel>命名规则</SectionLabel>
           <label className="block space-y-1">
-            <span className="text-[11.5px] text-zinc-400">片段顺序</span>
+            <span className="text-[0.7188rem] text-fg-muted">片段顺序</span>
             <input
-              className="input mono h-9 text-[12px]"
+              className="input mono h-9 text-[0.75rem]"
               value={rule.segments}
               onChange={(e) => setRule({ ...rule, segments: e.target.value })}
             />
-            <span className="block text-[10.5px] text-zinc-600">
+            <span className="block text-[0.6562rem] text-fg-subtle">
               可选：index / region / protocol / rawName
             </span>
           </label>
           <label className="block space-y-1">
-            <span className="text-[11.5px] text-zinc-400">分隔符</span>
+            <span className="text-[0.7188rem] text-fg-muted">分隔符</span>
             <input
-              className="input mono h-9 text-[12px]"
+              className="input mono h-9 text-[0.75rem]"
               value={rule.separator}
               onChange={(e) => setRule({ ...rule, separator: e.target.value })}
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-[11.5px] text-zinc-400">序号位数</span>
+            <span className="text-[0.7188rem] text-fg-muted">序号位数</span>
             <input
               type="number"
               min={1}
               max={4}
-              className="input mono h-9 text-[12px]"
+              className="input mono h-9 text-[0.75rem]"
               value={rule.zeroPad}
               onChange={(e) => setRule({ ...rule, zeroPad: Number(e.target.value) })}
             />
           </label>
-          <label className="flex items-center gap-2 text-[11.5px] text-zinc-300">
+          <label className="flex items-center gap-2 text-[0.7188rem] text-fg-soft">
             <input
               type="checkbox"
               checked={rule.upperProtocol}
@@ -515,13 +511,13 @@ function NodeOrderStep({
 
         <div className="card p-3.5">
           <SectionLabel>单节点改名</SectionLabel>
-          <p className="mt-1 text-[11px] text-zinc-500">在第 1 步之后，可在预览里逐个覆盖名称。</p>
+          <p className="mt-1 text-[0.6875rem] text-fg-muted">在第 1 步之后，可在预览里逐个覆盖名称。</p>
           <div className="mt-2 space-y-1.5">
             {nodes.slice(0, 8).map((n) => (
               <div key={n.nodeId} className="space-y-1">
-                <span className="mono block truncate text-[10.5px] text-zinc-500">{n.rawName}</span>
+                <span className="mono block truncate text-[0.6562rem] text-fg-muted">{n.rawName}</span>
                 <input
-                  className="input mono h-8 text-[11.5px]"
+                  className="input mono h-8 text-[0.7188rem]"
                   placeholder={n.outputName}
                   value={overrides[n.nodeId] ?? ''}
                   onChange={(e) => onOverrides({ ...overrides, [n.nodeId]: e.target.value })}
@@ -550,22 +546,13 @@ function PublishStep({
   const [enabled, setEnabled] = useState(profile.enabled)
   const [target, setTarget] = useState<'mihomo' | 'sing-box' | 'loon'>('mihomo')
   const [preview, setPreview] = useState<{ content: string; skipped: string[] } | null>(null)
-  const [qr, setQr] = useState('')
   const [busy, setBusy] = useState(false)
   const [rotating, setRotating] = useState(false)
-  const [showQr, setShowQr] = useState(false)
 
   useEffect(() => {
     setTemplateId(profile.templateId)
     setEnabled(profile.enabled)
   }, [profile])
-
-  useEffect(() => {
-    if (!profile.url) return
-    QRCode.toDataURL(profile.url, { margin: 1, width: 220, color: { dark: '#e4e4e7', light: '#18181b' } })
-      .then(setQr)
-      .catch(() => setQr(''))
-  }, [profile.url])
 
   const save = async () => {
     setBusy(true)
@@ -622,12 +609,12 @@ function PublishStep({
       <div className="space-y-3">
         <div className="card space-y-3.5 p-4">
           <div className="flex items-center gap-2">
-            <Layers3 size={14} className="text-cyan-300" />
-            <h2 className="text-[13px] font-semibold">模板与状态</h2>
+            <Layers3 size={14} className="text-accent" />
+            <h2 className="text-[0.8125rem] font-semibold">模板与状态</h2>
           </div>
 
           <label className="block space-y-1.5">
-            <span className="text-[12px] font-medium text-zinc-300">Clash 模板</span>
+            <span className="text-[0.75rem] font-medium text-fg-soft">Clash 模板</span>
             <select
               className="input"
               value={templateId}
@@ -642,7 +629,7 @@ function PublishStep({
             </select>
           </label>
 
-          <label className="flex items-center gap-2 text-[12.5px] text-zinc-300">
+          <label className="flex items-center gap-2 text-[0.7812rem] text-fg-soft">
             <input
               type="checkbox"
               checked={enabled}
@@ -664,16 +651,16 @@ function PublishStep({
 
         <div className="card p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-[13px] font-semibold">配置预览</h2>
-            <div className="ml-auto flex items-center gap-1 rounded-md border border-zinc-800 p-0.5">
+            <h2 className="text-[0.8125rem] font-semibold">配置预览</h2>
+            <div className="ml-auto flex items-center gap-1 rounded-md border border-line p-0.5">
               {(['mihomo', 'sing-box', 'loon'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setTarget(t)}
                   aria-pressed={target === t}
-                  className={`rounded px-2 py-1 text-[11.5px] transition-colors ${
-                    target === t ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                  className={`rounded px-2 py-1 text-[0.7188rem] transition-colors ${
+                    target === t ? 'bg-raised text-fg' : 'text-fg-muted hover:text-fg-soft'
                   }`}
                 >
                   {t === 'mihomo' ? 'Mihomo' : t === 'sing-box' ? 'sing-box' : 'Loon'}
@@ -688,16 +675,24 @@ function PublishStep({
           {preview ? (
             <>
               {preview.skipped.length > 0 && (
-                <p className="mt-2 rounded border border-amber-400/30 bg-amber-400/5 px-2.5 py-1.5 text-[11.5px] text-amber-200">
+                <p className="mt-2 rounded border border-warning/30 bg-warning/5 px-2.5 py-1.5 text-[0.7188rem] text-warning">
                   已跳过 {preview.skipped.length} 个不支持的节点：{preview.skipped.join('、')}
                 </p>
               )}
-              <pre className="mono mt-3 max-h-[420px] overflow-auto rounded border border-zinc-800 bg-zinc-950 p-3 text-[11.5px] leading-relaxed text-zinc-300">
-                {preview.content}
-              </pre>
+              <div className="mt-3">
+                <CodeEditor
+                  value={preview.content}
+                  onChange={() => {}}
+                  readOnly
+                  language={target === 'sing-box' ? 'json' : target === 'loon' ? 'ini' : 'yaml'}
+                  ariaLabel="配置预览"
+                  height={420}
+                  footer={`${target} · 只读`}
+                />
+              </div>
             </>
           ) : (
-            <p className="mt-3 text-[12px] text-zinc-500">
+            <p className="mt-3 text-[0.75rem] text-fg-muted">
               选择目标客户端后生成预览，确认无误再复制订阅链接。
             </p>
           )}
@@ -705,81 +700,30 @@ function PublishStep({
       </div>
 
       <aside className="space-y-3">
-        <div className="card p-4">
-          <div className="flex items-center gap-2">
-            <KeyRound size={14} className="text-cyan-300" />
-            <h2 className="text-[13px] font-semibold">订阅链接</h2>
-          </div>
-          {profile.url ? (
-            <>
-              <div className="mt-3 rounded border border-zinc-800 bg-zinc-950 p-2.5">
-                <code className="mono block break-all text-[11px] leading-relaxed text-zinc-300">
-                  {profile.url}
-                </code>
-              </div>
-              <div className="mt-2 flex gap-1.5">
-                <button
-                  type="button"
-                  className="btn btn-primary flex-1"
-                  onClick={() => {
-                    copyText(profile.url)
-                    toast('success', '订阅链接已复制')
-                  }}
-                >
-                  <Copy size={13} /> 复制
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setShowQr(true)}
-                  aria-label="显示二维码"
-                >
-                  <QrCode size={13} />
-                </button>
-              </div>
-              <p className="mt-2 text-[11px] text-zinc-500">
-                链接按 User-Agent 自动返回 Mihomo / sing-box / Loon 对应格式。
-              </p>
-            </>
-          ) : (
-            <p className="mt-3 rounded border border-amber-400/30 bg-amber-400/5 px-2.5 py-2 text-[11.5px] text-amber-200">
-              未配置实例外部地址，只生成了相对路径。请到「设置」填写 external_url 后重新保存。
-            </p>
-          )}
-
-          <button
-            type="button"
-            className="btn btn-ghost mt-3 w-full"
-            onClick={rotate}
-            disabled={rotating}
-          >
-            {rotating ? <Spinner /> : <RotateCw size={13} />} 轮换令牌
-          </button>
-        </div>
+        <SubscriptionOutput
+          url={profile.url}
+          name={profile.name}
+          onRotate={rotate}
+          rotating={rotating}
+        />
 
         <div className="card p-4">
           <SectionLabel>客户端</SectionLabel>
-          <ul className="mt-2 space-y-1.5 text-[11.5px] text-zinc-400">
+          <ul className="mt-2 space-y-1.5 text-[0.7188rem] text-fg-muted">
             <li className="flex items-center gap-1.5">
-              <Plane size={11} className="text-zinc-600" /> Mihomo：Clash Verge / FlClash
+              <Plane size={11} className="text-fg-subtle" /> Mihomo：Clash Verge / FlClash
             </li>
             <li className="flex items-center gap-1.5">
-              <Server size={11} className="text-zinc-600" /> sing-box：SFA / SFI
+              <Server size={11} className="text-fg-subtle" /> sing-box：SFA / SFI
             </li>
             <li className="flex items-center gap-1.5">
-              <ShieldCheck size={11} className="text-zinc-600" /> Loon（iOS）
+              <ShieldCheck size={11} className="text-fg-subtle" /> Loon（iOS）
             </li>
           </ul>
-          <p className="mt-2 text-[11px] text-zinc-600">mieru 协议仅支持 Mihomo。</p>
+          <p className="mt-2 text-[0.6875rem] text-fg-subtle">mieru 协议仅支持 Mihomo。</p>
         </div>
       </aside>
 
-      <Modal open={showQr} title="订阅二维码" onClose={() => setShowQr(false)}>
-        {qr && <img src={qr} alt="订阅链接二维码" className="mx-auto w-[220px] rounded" />}
-        {profile.url && (
-          <p className="mono mt-3 break-all text-center text-[11px] text-zinc-500">{profile.url}</p>
-        )}
-      </Modal>
     </section>
   )
 }

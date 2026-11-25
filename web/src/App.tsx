@@ -13,6 +13,7 @@ import {
 import { api, setCsrfToken, type Me } from './lib/api'
 import { toast } from './lib/hooks'
 import { Toaster } from './components/ui'
+import { ThemeToggle } from './components/ThemeToggle'
 import { LoginPage } from './pages/Login'
 import { DashboardPage } from './pages/Dashboard'
 import { SourcesPage } from './pages/Sources'
@@ -98,8 +99,8 @@ export function App() {
 
   if (checking) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-zinc-950">
-        <div className="mono text-[12px] text-zinc-600">连接实例中…</div>
+      <div className="flex min-h-dvh items-center justify-center bg-canvas">
+        <div className="mono text-[0.75rem] text-fg-subtle">连接实例中…</div>
       </div>
     )
   }
@@ -127,23 +128,23 @@ export function App() {
   const go = (path: string) => navigate(path)
 
   return (
-    <div className="min-h-dvh bg-zinc-950">
+    <div className="min-h-dvh bg-canvas">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-zinc-900 focus:px-3 focus:py-2"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
       >
         跳到主内容
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 hidden w-56 flex-col border-r border-zinc-800 bg-zinc-950 md:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-56 flex-col border-r border-line bg-canvas md:flex">
         <div className="flex items-center gap-2 px-4 py-4">
-          <div className="flex h-7 w-7 items-center justify-center rounded border border-cyan-400/30 bg-cyan-400/10 font-mono text-[13px] font-semibold text-cyan-300">
+          <div className="flex h-7 w-7 items-center justify-center rounded border border-accent/30 bg-accent/10 font-mono text-[0.8125rem] font-semibold text-accent">
             S
           </div>
           <div className="leading-tight">
-            <div className="text-[13px] font-semibold">SubS</div>
-            <div className="mono text-[9.5px] uppercase tracking-[0.14em] text-zinc-600">
+            <div className="text-[0.8125rem] font-semibold">SubS</div>
+            <div className="mono text-[0.5938rem] uppercase tracking-[0.14em] text-fg-subtle">
               private sub ops
             </div>
           </div>
@@ -159,7 +160,7 @@ export function App() {
               onClick={() => go(item.path)}
             />
           ))}
-          <div className="my-2 border-t border-zinc-800/80" />
+          <div className="my-2 border-t border-line/80" />
           {SECONDARY.map((item) => (
             <NavButton
               key={item.name}
@@ -172,39 +173,43 @@ export function App() {
           ))}
         </nav>
 
-        <div className="mt-auto space-y-2 border-t border-zinc-800 p-3">
-          <div className="flex items-center gap-1.5 text-[11px] text-zinc-600">
+        <div className="mt-auto space-y-2 border-t border-line p-3">
+          <div className="flex items-center gap-1.5 text-[0.6875rem] text-fg-subtle">
             <ShieldCheck size={12} />
             <span>本地运行 · 无遥测</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="mono truncate text-[11.5px] text-zinc-400">{me.username}</span>
-            <button
-              type="button"
-              onClick={logout}
-              aria-label="退出登录"
-              className="flex h-8 w-8 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-            >
-              <LogOut size={14} />
-            </button>
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="mono truncate text-[0.7188rem] text-fg-muted">{me.username}</span>
+            <div className="flex items-center gap-1">
+              <ThemeToggle compact />
+              <button
+                type="button"
+                onClick={logout}
+                aria-label="退出登录"
+                className="flex h-9 w-9 items-center justify-center rounded-md border border-line text-fg-muted transition-colors hover:border-line-strong hover:bg-raised hover:text-fg"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
 
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-800 bg-zinc-950/90 px-4 py-3 backdrop-blur md:hidden">
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-canvas/90 px-4 py-3 backdrop-blur md:hidden">
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded border border-cyan-400/30 bg-cyan-400/10 font-mono text-[11px] text-cyan-300">
+          <div className="flex h-6 w-6 items-center justify-center rounded border border-accent/30 bg-accent/10 font-mono text-[0.6875rem] text-accent">
             S
           </div>
-          <span className="text-[13px] font-semibold">SubS</span>
+          <span className="text-[0.8125rem] font-semibold">SubS</span>
         </div>
         <div className="flex items-center gap-1">
+          <ThemeToggle compact />
           <button
             type="button"
             onClick={() => go('/settings')}
             aria-label="设置"
-            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-800"
+            className="flex h-9 w-9 items-center justify-center rounded text-fg-muted hover:bg-raised"
           >
             <Settings2 size={16} />
           </button>
@@ -212,7 +217,7 @@ export function App() {
             type="button"
             onClick={logout}
             aria-label="退出登录"
-            className="flex h-9 w-9 items-center justify-center rounded text-zinc-400 hover:bg-zinc-800"
+            className="flex h-9 w-9 items-center justify-center rounded text-fg-muted hover:bg-raised"
           >
             <LogOut size={16} />
           </button>
@@ -236,7 +241,7 @@ export function App() {
 
       {/* Mobile bottom tabs */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-canvas/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
         aria-label="底部导航"
       >
         <div className="grid grid-cols-4">
@@ -248,8 +253,8 @@ export function App() {
                 type="button"
                 onClick={() => go(item.path)}
                 aria-current={active ? 'page' : undefined}
-                className={`flex h-14 flex-col items-center justify-center gap-0.5 text-[10.5px] transition-colors ${
-                  active ? 'text-cyan-300' : 'text-zinc-500'
+                className={`flex h-14 flex-col items-center justify-center gap-0.5 text-[0.6562rem] transition-colors ${
+                  active ? 'text-accent' : 'text-fg-muted'
                 }`}
               >
                 <item.icon size={18} />
@@ -283,17 +288,17 @@ function NavButton({
       type="button"
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className={`flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] transition-colors ${
+      className={`flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-[0.8125rem] transition-colors ${
         active
-          ? 'bg-zinc-800/70 text-zinc-100'
+          ? 'bg-raised/70 text-fg'
           : danger
-            ? 'text-red-400/70 hover:bg-red-500/10 hover:text-red-300'
-            : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+            ? 'text-danger/70 hover:bg-danger/10 hover:text-danger'
+            : 'text-fg-muted hover:bg-surface hover:text-fg'
       }`}
     >
-      <span className={active ? 'text-cyan-300' : danger ? '' : 'text-zinc-500'}>{icon}</span>
+      <span className={active ? 'text-accent' : danger ? '' : 'text-fg-muted'}>{icon}</span>
       {label}
-      {active && <span className="ml-auto h-3.5 w-0.5 rounded-full bg-cyan-400" aria-hidden />}
+      {active && <span className="ml-auto h-3.5 w-0.5 rounded-full bg-accent" aria-hidden />}
     </button>
   )
 }

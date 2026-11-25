@@ -190,8 +190,8 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <SectionLabel>workspace / nodes</SectionLabel>
-          <h1 className="mt-1 text-base font-semibold tracking-tight">节点库</h1>
-          <p className="mt-1 text-[12.5px] text-zinc-500">
+          <h1 className="mt-1 text-page font-semibold tracking-tight">节点库</h1>
+          <p className="mt-1 text-[0.7812rem] text-fg-muted">
             机场与自建节点统一存放。新出现的机场节点会标记为待确认。
           </p>
         </div>
@@ -216,7 +216,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                 <button
                   type="button"
                   onClick={() => setFilters({ ...filters, sourceType: undefined, sourceId: undefined })}
-                  className="text-[11px] text-zinc-500 hover:text-zinc-300"
+                  className="text-[0.6875rem] text-fg-muted hover:text-fg-soft"
                 >
                   清除
                 </button>
@@ -226,14 +226,14 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
               <button
                 type="button"
                 onClick={() => setFilters({ ...filters, sourceType: undefined, sourceId: undefined })}
-                className={`flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-[12px] transition-colors lg:w-full ${
+                className={`flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-[0.75rem] transition-colors lg:w-full ${
                   !filters.sourceType && !filters.sourceId
-                    ? 'bg-zinc-800 text-zinc-100'
-                    : 'text-zinc-400 hover:bg-zinc-800/50'
+                    ? 'bg-raised text-fg'
+                    : 'text-fg-muted hover:bg-raised/50'
                 }`}
               >
                 <Boxes size={13} /> 全部
-                <span className="mono ml-auto text-[11px] text-zinc-500">{airports.data && servers.data ? (airports.data.reduce((s, a) => s + a.nodeCount, 0) + servers.data.reduce((s, v) => s + v.nodeCount, 0)) : ''}</span>
+                <span className="mono ml-auto text-[0.6875rem] text-fg-muted">{airports.data && servers.data ? (airports.data.reduce((s, a) => s + a.nodeCount, 0) + servers.data.reduce((s, v) => s + v.nodeCount, 0)) : ''}</span>
               </button>
               {sourceOptions.map((opt) => {
                 const active = filters.sourceId === opt.id && filters.sourceType === opt.type
@@ -242,8 +242,8 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                     key={`${opt.type}-${opt.id}`}
                     type="button"
                     onClick={() => setFilters({ ...filters, sourceType: opt.type, sourceId: opt.id })}
-                    className={`flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-[12px] transition-colors lg:w-full ${
-                      active ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/50'
+                    className={`flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-[0.75rem] transition-colors lg:w-full ${
+                      active ? 'bg-raised text-fg' : 'text-fg-muted hover:bg-raised/50'
                     }`}
                   >
                     {opt.type === 'airport' ? (
@@ -252,7 +252,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                       <Server size={13} className="text-[var(--server-accent)]" />
                     )}
                     <span className="truncate">{opt.name}</span>
-                    <span className="mono ml-auto shrink-0 text-[11px] text-zinc-500">{opt.count}</span>
+                    <span className="mono ml-auto shrink-0 text-[0.6875rem] text-fg-muted">{opt.count}</span>
                   </button>
                 )
               })}
@@ -279,7 +279,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
         <section className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-0 flex-1">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-muted" />
               <input
                 className="input pl-8"
                 placeholder="搜索节点原始名…"
@@ -297,7 +297,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                     setSearch('')
                     setFilters({ ...filters, q: undefined })
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg-soft"
                 >
                   <X size={13} />
                 </button>
@@ -319,7 +319,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                   </option>
                 ))}
               </select>
-              <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-fg-muted" />
             </div>
             <button
               type="button"
@@ -332,8 +332,8 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
           </div>
 
           {selected.size > 0 && (
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-cyan-400/30 bg-cyan-400/5 px-3 py-2 text-[12px]">
-              <span className="text-cyan-200">已选 {selected.size} 项</span>
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-[0.75rem]">
+              <span className="text-accent-strong">已选 {selected.size} 项</span>
               <div className="ml-auto flex items-center gap-1.5">
                 <button type="button" className="btn btn-ghost h-8" onClick={() => bulk('enable')}>
                   启用
@@ -347,7 +347,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                 <button
                   type="button"
                   aria-label="取消选择"
-                  className="flex h-8 w-8 items-center justify-center rounded text-cyan-200/70 hover:bg-cyan-400/10"
+                  className="flex h-8 w-8 items-center justify-center rounded text-accent-strong/70 hover:bg-accent/10"
                   onClick={() => setSelected(new Set())}
                 >
                   <X size={14} />
@@ -372,13 +372,13 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
               }
             />
           ) : (
-            <ul className="divide-y divide-zinc-800/70 overflow-hidden rounded-lg border border-zinc-800">
+            <ul className="divide-y divide-line/70 overflow-hidden rounded-lg border border-line">
               {allNodes.map((node) => {
                 const checked = selected.has(node.id)
                 return (
                   <li
                     key={node.id}
-                    className={`flex items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-zinc-900/50 ${
+                    className={`flex items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-surface/50 ${
                       checked ? 'bg-cyan-400/[0.04]' : ''
                     } ${!node.enabled ? 'opacity-60' : ''}`}
                   >
@@ -405,8 +405,8 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span
-                          className={`mono truncate text-[12.5px] ${
-                            node.missing ? 'text-zinc-500 line-through' : 'text-zinc-100'
+                          className={`mono truncate text-[0.7812rem] ${
+                            node.missing ? 'text-fg-muted line-through' : 'text-fg'
                           }`}
                         >
                           {node.rawName}
@@ -421,12 +421,12 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                         <ProtocolBadge protocol={node.protocol} />
-                        <span className="mono truncate text-[11px] text-zinc-500">
+                        <span className="mono truncate text-[0.6875rem] text-fg-muted">
                           {node.host}:{node.portRange || node.port}
                         </span>
-                        <span className="text-[10.5px] text-zinc-600">{node.sourceName}</span>
+                        <span className="text-[0.6562rem] text-fg-subtle">{node.sourceName}</span>
                         {node.inProfiles > 0 && (
-                          <span className="text-[10.5px] text-zinc-600">· {node.inProfiles} 编排</span>
+                          <span className="text-[0.6562rem] text-fg-subtle">· {node.inProfiles} 编排</span>
                         )}
                       </div>
                     </div>
@@ -439,12 +439,12 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                         onClick={() => toggleNode(node, !node.enabled)}
                         className={`relative h-5 w-9 rounded-full border transition-colors ${
                           node.enabled
-                            ? 'border-cyan-400/40 bg-cyan-400/25'
-                            : 'border-zinc-700 bg-zinc-800'
+                            ? 'border-accent/40 bg-accent/25'
+                            : 'border-line-strong bg-raised'
                         }`}
                       >
                         <span
-                          className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-zinc-200 transition-all ${
+                          className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-fg transition-all ${
                             node.enabled ? 'left-[18px]' : 'left-0.5'
                           }`}
                         />
@@ -455,7 +455,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                           aria-label="标记为可用"
                           title="标记为可用"
                           onClick={() => restore(node)}
-                          className="flex h-8 w-8 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-emerald-300"
+                          className="flex h-8 w-8 items-center justify-center rounded text-fg-muted hover:bg-raised hover:text-success"
                         >
                           <RotateCcw size={13} />
                         </button>
@@ -465,7 +465,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                         aria-label="编辑节点"
                         title="编辑节点"
                         onClick={() => setEditing(node)}
-                        className="flex h-8 w-8 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                        className="flex h-8 w-8 items-center justify-center rounded text-fg-muted hover:bg-raised hover:text-fg"
                       >
                         <Pencil size={13} />
                       </button>
@@ -474,7 +474,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                         aria-label="删除节点"
                         title="删除节点"
                         onClick={() => removeNode(node)}
-                        className="flex h-8 w-8 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-red-300"
+                        className="flex h-8 w-8 items-center justify-center rounded text-fg-muted hover:bg-raised hover:text-danger"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -513,15 +513,15 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
           <div className="space-y-3">
             <div>
               <SectionLabel>原始名</SectionLabel>
-              <p className="mono mt-1 break-all text-[12.5px] text-zinc-200">{editing.rawName}</p>
+              <p className="mono mt-1 break-all text-[0.7812rem] text-fg">{editing.rawName}</p>
             </div>
             <div>
               <SectionLabel>指纹</SectionLabel>
-              <p className="mono mt-1 break-all text-[11px] text-zinc-500">{editing.fingerprint}</p>
+              <p className="mono mt-1 break-all text-[0.6875rem] text-fg-muted">{editing.fingerprint}</p>
             </div>
             <div>
               <SectionLabel>配置（含凭据，已加密存储）</SectionLabel>
-              <pre className="mono mt-1 max-h-64 overflow-auto rounded border border-zinc-800 bg-zinc-950 p-2 text-[11.5px] text-zinc-400">
+              <pre className="mono mt-1 max-h-64 overflow-auto rounded border border-line bg-canvas p-2 text-[0.7188rem] text-fg-muted">
                 {JSON.stringify(editing.config, null, 2)}
               </pre>
             </div>
@@ -549,7 +549,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
           </>
         }
       >
-        <p className="text-[12.5px] text-zinc-400">此操作不可撤销。</p>
+        <p className="text-[0.7812rem] text-fg-muted">此操作不可撤销。</p>
       </Modal>
     </div>
   )
@@ -569,8 +569,8 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-[12px] transition-colors ${
-        active ? 'bg-amber-400/10 text-amber-200' : 'text-zinc-400 hover:bg-zinc-800/50'
+      className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-[0.75rem] transition-colors ${
+        active ? 'bg-warning/10 text-warning' : 'text-fg-muted hover:bg-raised/50'
       }`}
     >
       {children}
@@ -664,9 +664,9 @@ function ImportDialog({
     >
       <div className="space-y-3">
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">归属 VPS</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">归属 VPS</span>
           {servers.length === 0 ? (
-            <div className="flex items-center justify-between rounded border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-[12px] text-amber-200">
+            <div className="flex items-center justify-between rounded border border-warning/30 bg-warning/5 px-3 py-2 text-[0.75rem] text-warning">
               还没有 VPS 分组
               <button type="button" onClick={onCreateServer} className="underline">
                 去创建
@@ -689,9 +689,9 @@ function ImportDialog({
         </label>
 
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">节点链接</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">节点链接</span>
           <textarea
-            className="input mono h-40 resize-y py-2 text-[12px] leading-relaxed break-all"
+            className="input mono h-40 resize-y py-2 text-[0.75rem] leading-relaxed break-all"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={'hy2://password@host:443?sni=host#香港 01\nvless://uuid@host:443?security=reality&...#东京 02'}
@@ -703,26 +703,26 @@ function ImportDialog({
 
         {preview && (
           <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2 text-[12px]">
+            <div className="flex flex-wrap items-center gap-2 text-[0.75rem]">
               <Badge tone="emerald">{preview.parsed.length} 可导入</Badge>
               {preview.errors.length > 0 && <Badge tone="red">{preview.errors.length} 解析失败</Badge>}
               {preview.ignored > 0 && <Badge tone="neutral">{preview.ignored} 忽略</Badge>}
             </div>
-            <ul className="max-h-56 divide-y divide-zinc-800 overflow-y-auto rounded border border-zinc-800">
+            <ul className="max-h-56 divide-y divide-line overflow-y-auto rounded border border-line">
               {preview.parsed.map((p, i) => (
                 <li key={i} className="flex items-center gap-2 px-2.5 py-1.5">
-                  <Check size={12} className="shrink-0 text-emerald-400" />
-                  <span className="mono truncate text-[12px] text-zinc-200">{p.rawName}</span>
+                  <Check size={12} className="shrink-0 text-success" />
+                  <span className="mono truncate text-[0.75rem] text-fg">{p.rawName}</span>
                   <ProtocolBadge protocol={p.protocol} />
-                  <span className="mono ml-auto truncate text-[11px] text-zinc-500">
+                  <span className="mono ml-auto truncate text-[0.6875rem] text-fg-muted">
                     {p.host}:{p.portRange || p.port}
                   </span>
                 </li>
               ))}
               {preview.errors.map((e, i) => (
                 <li key={`e-${i}`} className="flex items-start gap-2 px-2.5 py-1.5">
-                  <X size={12} className="mt-0.5 shrink-0 text-red-400" />
-                  <span className="text-[11.5px] text-red-300">
+                  <X size={12} className="mt-0.5 shrink-0 text-danger" />
+                  <span className="text-[0.7188rem] text-danger">
                     第 {e.line} 行：{e.reason}
                   </span>
                 </li>

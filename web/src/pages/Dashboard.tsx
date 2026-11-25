@@ -36,13 +36,13 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <SectionLabel>workspace / overview</SectionLabel>
-          <h1 className="mt-1 text-base font-semibold tracking-tight">运行概览</h1>
+          <h1 className="mt-1 text-page font-semibold tracking-tight">运行概览</h1>
         </div>
-        <div className="flex items-center gap-2 text-[11.5px] text-zinc-500">
-          <CheckCircle2 size={13} className="text-emerald-400" />
+        <div className="flex items-center gap-2 text-[0.7188rem] text-fg-muted">
+          <CheckCircle2 size={13} className="text-success" />
           服务正常
-          <span className="text-zinc-700">·</span>
-          版本 <code className="text-zinc-400">{s?.version || 'dev'}</code>
+          <span className="text-fg-subtle">·</span>
+          版本 <code className="text-fg-muted">{s?.version || 'dev'}</code>
         </div>
       </header>
 
@@ -87,7 +87,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
             <button
               type="button"
               onClick={() => onNavigate('/nodes?isNew=1')}
-              className="flex w-full items-center gap-2.5 rounded-lg border border-amber-400/30 bg-amber-400/5 px-3.5 py-2.5 text-left text-[12.5px] text-amber-200 transition-colors hover:border-amber-400/50"
+              className="flex w-full items-center gap-2.5 rounded-lg border border-warning/30 bg-warning/5 px-3.5 py-2.5 text-left text-[0.7812rem] text-warning transition-colors hover:border-warning/50"
             >
               <TriangleAlert size={14} className="shrink-0" />
               <span>
@@ -99,16 +99,16 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
           )}
 
           <section className="card overflow-hidden">
-            <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <div className="flex items-center gap-2">
-                <ShieldCheck size={14} className="text-cyan-300" />
-                <h2 className="text-[13px] font-semibold">订阅编排</h2>
-                <span className="mono text-[11px] text-zinc-500">{profileList.length}</span>
+                <ShieldCheck size={14} className="text-accent" />
+                <h2 className="text-[0.8125rem] font-semibold">订阅编排</h2>
+                <span className="mono text-[0.6875rem] text-fg-muted">{profileList.length}</span>
               </div>
               <button
                 type="button"
                 onClick={() => onNavigate('/profiles')}
-                className="flex items-center gap-1 text-[12px] text-cyan-300 hover:text-cyan-200"
+                className="flex items-center gap-1 text-[0.75rem] text-accent hover:text-accent-strong"
               >
                 管理 <ArrowUpRight size={12} />
               </button>
@@ -128,27 +128,27 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
                 />
               </div>
             ) : (
-              <ul className="divide-y divide-zinc-800/70">
+              <ul className="divide-y divide-line/70">
                 {profileList.map((p) => (
                   <li key={p.id}>
                     <button
                       type="button"
                       onClick={() => onNavigate(`/profiles/${p.id}`)}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-800/30"
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-raised/30"
                     >
                       <span
                         className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                          p.enabled ? 'bg-emerald-400' : 'bg-zinc-600'
+                          p.enabled ? 'bg-success' : 'bg-line-strong'
                         }`}
                         aria-hidden
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] text-zinc-100">{p.name}</div>
-                        <div className="mono mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-zinc-500">
+                        <div className="truncate text-[0.8125rem] text-fg">{p.name}</div>
+                        <div className="mono mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.6875rem] text-fg-muted">
                           <span>{p.nodeCount} 节点</span>
-                          <span className="text-zinc-700">·</span>
+                          <span className="text-fg-subtle">·</span>
                           <span>{p.templateName || '无模板'}</span>
-                          <span className="text-zinc-700">·</span>
+                          <span className="text-fg-subtle">·</span>
                           <span>拉取 {relativeTime(p.lastFetchAt)}</span>
                         </div>
                       </div>
@@ -169,19 +169,19 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
             <div className="card p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <HardDrive size={14} className="text-zinc-500" />
-                  <h2 className="text-[13px] font-semibold">实例状态</h2>
+                  <HardDrive size={14} className="text-fg-muted" />
+                  <h2 className="text-[0.8125rem] font-semibold">实例状态</h2>
                 </div>
                 <button
                   type="button"
                   onClick={() => onNavigate('/settings')}
                   aria-label="打开设置"
-                  className="text-zinc-500 hover:text-zinc-300"
+                  className="text-fg-muted hover:text-fg-soft"
                 >
                   <ArrowUpRight size={14} />
                 </button>
               </div>
-              <dl className="mt-3 space-y-2 text-[12px]">
+              <dl className="mt-3 space-y-2 text-[0.75rem]">
                 <Row label="实例名" value={<code>{s?.instanceName || 'my-subs'}</code>} />
                 <Row
                   label="监听"
@@ -202,23 +202,23 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
             <div className="card p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <DatabaseBackup size={14} className="text-zinc-500" />
-                  <h2 className="text-[13px] font-semibold">备份</h2>
+                  <DatabaseBackup size={14} className="text-fg-muted" />
+                  <h2 className="text-[0.8125rem] font-semibold">备份</h2>
                 </div>
                 <button
                   type="button"
                   onClick={() => onNavigate('/backup')}
                   aria-label="打开备份"
-                  className="text-zinc-500 hover:text-zinc-300"
+                  className="text-fg-muted hover:text-fg-soft"
                 >
                   <ArrowUpRight size={14} />
                 </button>
               </div>
-              <p className="mt-3 text-[12.5px] text-zinc-400">
+              <p className="mt-3 text-[0.7812rem] text-fg-muted">
                 上次备份：<span className="mono">{relativeTime(s?.lastBackupAt)}</span>
               </p>
               {needsBackup(s?.lastBackupAt) && (
-                <p className="mt-2 flex items-start gap-1.5 rounded border border-amber-400/30 bg-amber-400/5 px-2.5 py-2 text-[12px] text-amber-200">
+                <p className="mt-2 flex items-start gap-1.5 rounded border border-warning/30 bg-warning/5 px-2.5 py-2 text-[0.75rem] text-warning">
                   <TriangleAlert size={13} className="mt-0.5 shrink-0" />
                   已超过 30 天未备份，建议导出一份加密备份。
                 </p>
@@ -235,7 +235,7 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
         </>
       )}
 
-      <p className="flex items-center justify-center gap-1.5 pt-2 text-[11px] text-zinc-600">
+      <p className="flex items-center justify-center gap-1.5 pt-2 text-[0.6875rem] text-fg-subtle">
         <ShieldCheck size={11} /> 凭据仅存储在此实例 · 无遥测
       </p>
     </div>
@@ -258,8 +258,8 @@ function needsBackup(iso?: string): boolean {
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <dt className="text-zinc-500">{label}</dt>
-      <dd className="mono truncate text-zinc-300">{value}</dd>
+      <dt className="text-fg-muted">{label}</dt>
+      <dd className="mono truncate text-fg-soft">{value}</dd>
     </div>
   )
 }
@@ -296,8 +296,8 @@ function SourceCard({
           <span
             className={`flex h-7 w-7 items-center justify-center rounded border ${
               isAirport
-                ? 'border-sky-400/25 bg-sky-400/5 text-sky-300'
-                : 'border-orange-400/25 bg-orange-400/5 text-orange-300'
+                ? 'border-info/25 bg-info/5 text-info'
+                : 'border-warning/25 bg-warning/5 text-warning'
             }`}
           >
             {isAirport ? <Plane size={14} /> : <Server size={14} />}
@@ -308,28 +308,28 @@ function SourceCard({
           type="button"
           onClick={onOpen}
           aria-label={isAirport ? '管理机场' : '管理 VPS'}
-          className="text-zinc-500 transition-colors hover:text-zinc-300"
+          className="text-fg-muted transition-colors hover:text-fg-soft"
         >
           <ArrowUpRight size={14} />
         </button>
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="mono text-2xl font-semibold tracking-tight text-zinc-100">{count}</span>
-        <span className="text-[12px] text-zinc-500">{isAirport ? '机场订阅' : '自建 VPS'}</span>
+        <span className="mono text-2xl font-semibold tracking-tight text-fg">{count}</span>
+        <span className="text-[0.75rem] text-fg-muted">{isAirport ? '机场订阅' : '自建 VPS'}</span>
         {count > 0 && (
-          <span className="mono ml-auto text-[11px] text-zinc-500">
+          <span className="mono ml-auto text-[0.6875rem] text-fg-muted">
             <Boxes size={11} className="mr-1 inline" />
             {nodes} 节点
           </span>
         )}
       </div>
 
-      <div className="mt-3 border-t border-zinc-800/70 pt-2.5">
+      <div className="mt-3 border-t border-line/70 pt-2.5">
         {status ? (
           <p
-            className={`truncate text-[11.5px] ${
-              status.tone === 'red' ? 'text-red-300' : 'text-zinc-500'
+            className={`truncate text-[0.7188rem] ${
+              status.tone === 'red' ? 'text-danger' : 'text-fg-muted'
             }`}
             title={status.text}
           >
@@ -337,12 +337,12 @@ function SourceCard({
             {status.text}
           </p>
         ) : (
-          <p className="text-[11.5px] text-zinc-600">{empty}</p>
+          <p className="text-[0.7188rem] text-fg-subtle">{empty}</p>
         )}
         <button
           type="button"
           onClick={onAction}
-          className="mt-2 inline-flex items-center gap-1 text-[12px] text-cyan-300 hover:text-cyan-200"
+          className="mt-2 inline-flex items-center gap-1 text-[0.75rem] text-accent hover:text-accent-strong"
         >
           <Plus size={12} /> {actionLabel}
         </button>

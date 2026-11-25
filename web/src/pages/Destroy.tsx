@@ -69,21 +69,21 @@ export function DestroyPage({ onNavigate }: { onNavigate: (path: string) => void
       <button
         type="button"
         onClick={() => onNavigate('/')}
-        className="inline-flex items-center gap-1 text-[12px] text-zinc-500 hover:text-zinc-300"
+        className="inline-flex items-center gap-1 text-[0.75rem] text-fg-muted hover:text-fg-soft"
       >
         <ArrowLeft size={12} /> 返回总览
       </button>
 
-      <div className="rounded-lg border border-red-400/30 bg-red-500/[0.04] p-4">
+      <div className="rounded-lg border border-danger/30 bg-red-500/[0.04] p-4">
         <div className="flex items-center gap-2">
-          <AlertOctagon size={16} className="text-red-400" />
-          <h1 className="text-[14px] font-semibold text-red-200">销毁实例</h1>
+          <AlertOctagon size={16} className="text-danger" />
+          <h1 className="text-[0.875rem] font-semibold text-danger">销毁实例</h1>
         </div>
-        <p className="mt-2 text-[12.5px] leading-relaxed text-red-200/80">
+        <p className="mt-2 text-[0.7812rem] leading-relaxed text-danger/80">
           此操作会删除数据库、主密钥与全部备份文件，且
           <b> 不可恢复 </b>。为防止误操作，需要先导出一份备份，并提交该备份的 SHA-256 进行校验。
         </p>
-        <ul className="mt-2.5 space-y-1 text-[12px] text-red-200/70">
+        <ul className="mt-2.5 space-y-1 text-[0.75rem] text-danger/70">
           <li>· 将清空：机场订阅、VPS、节点、模板、编排</li>
           <li>· 将清空：管理员账号、会话、审计记录</li>
           <li>· 将删除：master.key 与 backups/ 目录</li>
@@ -93,13 +93,13 @@ export function DestroyPage({ onNavigate }: { onNavigate: (path: string) => void
 
       <section className="card space-y-3.5 p-4">
         <div className="flex items-center gap-2">
-          <ShieldAlert size={14} className="text-zinc-500" />
-          <h2 className="text-[13px] font-semibold">确认</h2>
+          <ShieldAlert size={14} className="text-fg-muted" />
+          <h2 className="text-[0.8125rem] font-semibold">确认</h2>
         </div>
 
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">
-            输入实例名 <code className="mono text-cyan-300">{instanceName}</code>
+          <span className="text-[0.75rem] font-medium text-fg-soft">
+            输入实例名 <code className="mono text-accent">{instanceName}</code>
           </span>
           <input
             className="input mono"
@@ -111,20 +111,20 @@ export function DestroyPage({ onNavigate }: { onNavigate: (path: string) => void
         </label>
 
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">已下载备份的 SHA-256</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">已下载备份的 SHA-256</span>
           <input
-            className="input mono text-[11.5px]"
+            className="input mono text-[0.7188rem]"
             value={sha}
             onChange={(e) => setSha(e.target.value)}
             placeholder="64 位十六进制"
             autoComplete="off"
           />
-          <span className="block text-[11px] text-zinc-500">
+          <span className="block text-[0.6875rem] text-fg-muted">
             在「备份」页创建并下载后会显示该值。
           </span>
         </label>
 
-        <label className="flex items-start gap-2 text-[12.5px] text-zinc-300">
+        <label className="flex items-start gap-2 text-[0.7812rem] text-fg-soft">
           <input
             type="checkbox"
             checked={ack}
@@ -156,14 +156,14 @@ export function DestroyPage({ onNavigate }: { onNavigate: (path: string) => void
         </div>
 
         {stage === 'final' && (
-          <p className="flex items-start gap-1.5 rounded border border-zinc-800 bg-zinc-900/60 px-2.5 py-2 text-[11.5px] text-zinc-400">
-            <TriangleAlert size={13} className="mt-0.5 shrink-0 text-amber-300" />
+          <p className="flex items-start gap-1.5 rounded border border-line bg-surface/60 px-2.5 py-2 text-[0.7188rem] text-fg-muted">
+            <TriangleAlert size={13} className="mt-0.5 shrink-0 text-warning" />
             预检查已通过。点击「永久销毁实例」后将立即执行，无法回滚。
           </p>
         )}
       </section>
 
-      <p className="text-center text-[11px] text-zinc-600">
+      <p className="text-center text-[0.6875rem] text-fg-subtle">
         也可以在服务器上执行 <code className="mono">subs destroy --data-dir /var/lib/subs</code>
       </p>
     </div>

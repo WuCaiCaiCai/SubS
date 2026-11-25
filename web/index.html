@@ -1,2 +1,29 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><meta name="theme-color" content="#09090b"/><title>SubS · 私有订阅管理</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#121214" />
+    <title>SubS · 私有订阅管理</title>
+    <script>
+      // 首屏着色：在样式表加载前定好主题，避免深色→浅色闪一下。
+      (function () {
+        try {
+          var m = localStorage.getItem('subs-theme') || 'system';
+          var light =
+            m === 'light' ||
+            (m === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches);
+          var t = light ? 'light' : 'dark';
+          document.documentElement.dataset.theme = t;
+          document.documentElement.style.colorScheme = t;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', light ? '#f6f6f7' : '#121214');
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

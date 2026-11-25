@@ -60,22 +60,22 @@ export function LoginPage({ onAuthed }: { onAuthed: () => void }) {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-zinc-950 px-4">
+    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded border border-cyan-400/30 bg-cyan-400/10 font-mono text-[14px] font-semibold text-cyan-300">
+          <div className="flex h-8 w-8 items-center justify-center rounded border border-accent/30 bg-accent/10 font-mono text-[0.875rem] font-semibold text-accent">
             S
           </div>
           <div>
-            <div className="mono text-[15px] font-semibold tracking-tight">SubS</div>
-            <div className="text-[11.5px] text-zinc-500">自托管订阅管理</div>
+            <div className="mono text-[0.9375rem] font-semibold tracking-tight">SubS</div>
+            <div className="text-[0.7188rem] text-fg-muted">自托管订阅管理</div>
           </div>
         </div>
 
         <div className="card p-5">
           <div className="mb-4 flex items-center gap-2">
-            <ShieldCheck size={15} className="text-cyan-300" />
-            <h1 className="text-[14px] font-semibold">
+            <ShieldCheck size={15} className="text-accent" />
+            <h1 className="text-[0.875rem] font-semibold">
               {mode === 'login' ? '登录实例' : '初始化实例'}
             </h1>
           </div>
@@ -105,7 +105,7 @@ export function LoginPage({ onAuthed }: { onAuthed: () => void }) {
                   type="button"
                   onClick={() => setShow((v) => !v)}
                   aria-label={show ? '隐藏密码' : '显示密码'}
-                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-zinc-500 hover:text-zinc-300"
+                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-fg-muted hover:text-fg-soft"
                 >
                   {show ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
@@ -144,14 +144,14 @@ export function LoginPage({ onAuthed }: { onAuthed: () => void }) {
             </button>
           </form>
 
-          <div className="mt-4 border-t border-zinc-800 pt-3 text-center">
+          <div className="mt-4 border-t border-line pt-3 text-center">
             <button
               type="button"
               onClick={() => {
                 setMode(mode === 'login' ? 'init' : 'login')
                 setError('')
               }}
-              className="inline-flex items-center gap-1.5 text-[12px] text-zinc-500 hover:text-zinc-300"
+              className="inline-flex items-center gap-1.5 text-[0.75rem] text-fg-muted hover:text-fg-soft"
             >
               <KeyRound size={12} />
               {mode === 'login' ? '首次使用？初始化实例' : '已有实例？返回登录'}
@@ -159,7 +159,7 @@ export function LoginPage({ onAuthed }: { onAuthed: () => void }) {
           </div>
         </div>
 
-        <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-zinc-600">
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-[0.6875rem] text-fg-subtle">
           <LockKeyhole size={11} />
           凭据仅存储在本机，不发送到任何第三方
         </p>
@@ -179,9 +179,9 @@ function Field({
 }) {
   return (
     <label className="block space-y-1.5">
-      <span className="block text-[12px] font-medium text-zinc-300">{label}</span>
+      <span className="block text-[0.75rem] font-medium text-fg-soft">{label}</span>
       {children}
-      {hint && <span className="block text-[11.5px] text-zinc-500">{hint}</span>}
+      {hint && <span className="block text-[0.7188rem] text-fg-muted">{hint}</span>}
     </label>
   )
 }

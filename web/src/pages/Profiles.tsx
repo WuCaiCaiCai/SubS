@@ -41,8 +41,8 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (path: string) => voi
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <SectionLabel>workspace / profiles</SectionLabel>
-          <h1 className="mt-1 text-base font-semibold tracking-tight">订阅编排</h1>
-          <p className="mt-1 text-[12.5px] text-zinc-500">
+          <h1 className="mt-1 text-page font-semibold tracking-tight">订阅编排</h1>
+          <p className="mt-1 text-[0.7812rem] text-fg-muted">
             每个编排 = 一组节点 + 一套命名规则 + 一个模板，对外暴露一条订阅链接。
           </p>
         </div>
@@ -77,55 +77,55 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (path: string) => voi
                   className="group min-w-0 flex-1 text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-[13.5px] font-medium text-zinc-100 group-hover:text-cyan-200">
+                    <span className="truncate text-[0.8438rem] font-medium text-fg group-hover:text-accent-strong">
                       {p.name}
                     </span>
                     {p.enabled ? <Badge tone="emerald">启用</Badge> : <Badge tone="neutral">停用</Badge>}
                   </div>
-                  {p.note && <p className="mt-1 line-clamp-2 text-[12px] text-zinc-500">{p.note}</p>}
+                  {p.note && <p className="mt-1 line-clamp-2 text-[0.75rem] text-fg-muted">{p.note}</p>}
                 </button>
                 <button
                   type="button"
                   aria-label="删除编排"
                   onClick={() => remove(p)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-600 hover:bg-zinc-800 hover:text-red-300"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-danger"
                 >
                   <Trash2 size={13} />
                 </button>
               </div>
 
-              <dl className="mono mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11.5px]">
-                <div className="flex items-center gap-1.5 text-zinc-500">
+              <dl className="mono mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[0.7188rem]">
+                <div className="flex items-center gap-1.5 text-fg-muted">
                   <ShieldCheck size={11} /> 节点
-                  <span className="ml-auto text-zinc-300">{p.nodeCount}</span>
+                  <span className="ml-auto text-fg-soft">{p.nodeCount}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-zinc-500">
+                <div className="flex items-center gap-1.5 text-fg-muted">
                   <Layers3 size={11} /> 模板
-                  <span className="ml-auto truncate text-zinc-300" title={p.templateName}>
+                  <span className="ml-auto truncate text-fg-soft" title={p.templateName}>
                     {p.templateName || '—'}
                   </span>
                 </div>
-                <div className="col-span-2 flex items-center gap-1.5 text-zinc-500">
+                <div className="col-span-2 flex items-center gap-1.5 text-fg-muted">
                   <Copy size={11} /> 最近拉取
-                  <span className="ml-auto text-zinc-300">{relativeTime(p.lastFetchAt)}</span>
+                  <span className="ml-auto text-fg-soft">{relativeTime(p.lastFetchAt)}</span>
                 </div>
               </dl>
 
-              <div className="mt-3 flex items-center gap-1.5 border-t border-zinc-800/70 pt-2.5">
+              <div className="mt-3 flex items-center gap-1.5 border-t border-line/70 pt-2.5">
                 {p.url ? (
                   <>
-                    <code className="min-w-0 flex-1 truncate text-[11px] text-zinc-500" title={p.url}>
+                    <code className="min-w-0 flex-1 truncate text-[0.6875rem] text-fg-muted" title={p.url}>
                       /s/{p.token}
                     </code>
                     <CopyButton value={p.url} label="复制订阅链接" />
                   </>
                 ) : (
-                  <span className="text-[11.5px] text-amber-300/80">未配置外部地址，无法生成完整链接</span>
+                  <span className="text-[0.7188rem] text-warning/80">未配置外部地址，无法生成完整链接</span>
                 )}
                 <button
                   type="button"
                   onClick={() => onNavigate(`/profiles/${p.id}`)}
-                  className="flex h-8 items-center gap-1 rounded border border-zinc-700 px-2 text-[12px] text-zinc-300 hover:border-zinc-600 hover:text-zinc-100"
+                  className="flex h-8 items-center gap-1 rounded border border-line-strong px-2 text-[0.75rem] text-fg-soft hover:border-line-strong hover:text-fg"
                 >
                   编辑 <ArrowUpRight size={12} />
                 </button>
@@ -166,7 +166,7 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (path: string) => voi
           </>
         }
       >
-        <p className="text-[12.5px] text-zinc-400">此操作不可撤销。</p>
+        <p className="text-[0.7812rem] text-fg-muted">此操作不可撤销。</p>
       </Modal>
     </div>
   )
@@ -234,17 +234,17 @@ function CreateProfileDialog({
     >
       <form id="profile-create-form" onSubmit={submit} className="space-y-3.5">
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">编排名称</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">编排名称</span>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} required placeholder="例如：日常主力" />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">备注（可选）</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">备注（可选）</span>
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-[12px] font-medium text-zinc-300">模板</span>
+          <span className="text-[0.75rem] font-medium text-fg-soft">模板</span>
           {templates.length === 0 ? (
-            <p className="rounded border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-[12px] text-amber-200">
+            <p className="rounded border border-warning/30 bg-warning/5 px-3 py-2 text-[0.75rem] text-warning">
               还没有模板，请先在「模板」页导入一份 Clash 配置。
             </p>
           ) : (

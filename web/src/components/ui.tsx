@@ -14,13 +14,13 @@ export function Badge({
   className?: string
 }) {
   const tones: Record<string, string> = {
-    neutral: 'border-zinc-700 text-zinc-400',
-    cyan: 'border-cyan-400/40 text-cyan-300 bg-cyan-400/5',
-    emerald: 'border-emerald-400/40 text-emerald-300 bg-emerald-400/5',
-    amber: 'border-amber-400/40 text-amber-300 bg-amber-400/5',
-    red: 'border-red-400/40 text-red-300 bg-red-400/5',
-    sky: 'border-sky-400/40 text-sky-300 bg-sky-400/5',
-    orange: 'border-orange-400/40 text-orange-300 bg-orange-400/5',
+    neutral: 'border-line-strong text-fg-muted',
+    cyan: 'border-accent/40 text-accent bg-accent/5',
+    emerald: 'border-success/40 text-success bg-success/5',
+    amber: 'border-warning/40 text-warning bg-warning/5',
+    red: 'border-danger/40 text-danger bg-danger/5',
+    sky: 'border-info/40 text-info bg-info/5',
+    orange: 'border-warning/40 text-warning bg-warning/5',
   }
   return <span className={`badge ${tones[tone]} ${className}`}>{children}</span>
 }
@@ -75,7 +75,7 @@ export function CopyButton({
       type="button"
       aria-label={label}
       title={label}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded border border-zinc-800 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-200 ${className}`}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded border border-line text-fg-muted transition-colors hover:border-line-strong hover:text-fg ${className}`}
       onClick={async () => {
         const ok = await copyText(value)
         _toast(ok ? 'success' : 'error', ok ? '已复制到剪贴板' : '复制失败，请手动选择')
@@ -85,7 +85,7 @@ export function CopyButton({
         }
       }}
     >
-      {done ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+      {done ? <Check size={14} className="text-success" /> : <Copy size={14} />}
     </button>
   )
 }
@@ -102,13 +102,13 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-zinc-800 px-6 py-14 text-center">
-      <div className="flex h-10 w-10 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-500">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-line px-6 py-14 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-surface text-fg-muted">
         {icon}
       </div>
       <div className="space-y-1">
-        <p className="text-[13px] font-medium text-zinc-200">{title}</p>
-        <p className="max-w-sm text-[12.5px] leading-relaxed text-zinc-500">{description}</p>
+        <p className="text-[0.8125rem] font-medium text-fg">{title}</p>
+        <p className="max-w-sm text-[0.7812rem] leading-relaxed text-fg-muted">{description}</p>
       </div>
       {action}
     </div>
@@ -117,7 +117,7 @@ export function EmptyState({
 
 export function ErrorNote({ children }: { children: ReactNode }) {
   return (
-    <p role="alert" className="flex items-start gap-1.5 text-[12.5px] text-red-300">
+    <p role="alert" className="flex items-start gap-1.5 text-[0.7812rem] text-danger">
       <AlertTriangle size={13} className="mt-0.5 shrink-0" aria-hidden />
       <span>{children}</span>
     </p>
@@ -128,7 +128,7 @@ export function SkeletonRows({ rows = 4 }: { rows?: number }) {
   return (
     <div className="space-y-2" aria-hidden>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="h-14 animate-pulse rounded-md border border-zinc-800/60 bg-zinc-900/40" />
+        <div key={i} className="h-14 animate-pulse rounded-md border border-line/60 bg-surface/40" />
       ))}
     </div>
   )
@@ -158,26 +158,26 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-zinc-800 bg-zinc-900 shadow-2xl md:rounded-lg ${
+        className={`flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-line bg-surface shadow-2xl md:rounded-lg ${
           wide ? 'md:max-w-3xl' : 'md:max-w-md'
         }`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-800 px-4 py-3">
+        <div className="flex items-start justify-between gap-4 border-b border-line px-4 py-3">
           <div>
-            <h2 className="text-[14px] font-semibold text-zinc-100">{title}</h2>
-            {description && <p className="mt-0.5 text-[12px] text-zinc-500">{description}</p>}
+            <h2 className="text-[0.875rem] font-semibold text-fg">{title}</h2>
+            {description && <p className="mt-0.5 text-[0.75rem] text-fg-muted">{description}</p>}
           </div>
           <button
             type="button"
             aria-label="关闭"
             onClick={onClose}
-            className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+            className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-raised hover:text-fg"
           >
             <X size={16} />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
-        {footer && <div className="flex justify-end gap-2 border-t border-zinc-800 px-4 py-3">{footer}</div>}
+        {footer && <div className="flex justify-end gap-2 border-t border-line px-4 py-3">{footer}</div>}
       </div>
     </div>
   )
@@ -193,14 +193,14 @@ export function Toaster() {
       {list.map((t) => (
         <div
           key={t.id}
-          className={`pointer-events-auto flex w-full max-w-sm items-start gap-2 rounded-md border bg-zinc-900/95 px-3 py-2.5 text-[12.5px] shadow-lg backdrop-blur ${
+          className={`pointer-events-auto flex w-full max-w-sm items-start gap-2 rounded-md border bg-surface/95 px-3 py-2.5 text-[0.7812rem] shadow-lg backdrop-blur ${
             t.kind === 'success'
-              ? 'border-emerald-500/40 text-emerald-100'
+              ? 'border-success/40 text-success'
               : t.kind === 'error'
-                ? 'border-red-500/40 text-red-100'
+                ? 'border-danger/40 text-danger'
                 : t.kind === 'warning'
-                  ? 'border-amber-500/40 text-amber-100'
-                  : 'border-zinc-700 text-zinc-100'
+                  ? 'border-warning/40 text-warning'
+                  : 'border-line-strong text-fg'
           }`}
         >
           <span className="flex-1">{t.message}</span>
@@ -208,7 +208,7 @@ export function Toaster() {
             type="button"
             aria-label="关闭提示"
             onClick={() => dismissToast(t.id)}
-            className="text-zinc-500 hover:text-zinc-200"
+            className="text-fg-muted hover:text-fg"
           >
             <X size={13} />
           </button>

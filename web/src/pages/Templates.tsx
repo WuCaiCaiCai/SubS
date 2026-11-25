@@ -3,12 +3,17 @@ import { Check, FileCode2, Loader2, Plus, Save, Trash2, TriangleAlert, X } from 
 import { api, ApiError, type Template } from '../lib/api'
 import { relativeTime, toast, useAsync, useConfirm } from '../lib/hooks'
 import { Badge, EmptyState, ErrorNote, SectionLabel, SkeletonRows, Spinner } from '../components/ui'
+import { CodeEditor } from '../components/CodeEditor'
 
 export function TemplatesPage() {
   const templates = useAsync(() => api.get<Template[]>('/api/templates'))
   const { request, confirm, close } = useConfirm()
   const [activeId, setActiveId] = useState<number | null>(null)
-  const [draft, setDraft] = useState<{ name: string; content: string }>({ name: '', content: '' })
+  const [draft, setDraft] = useState<{ name: string; content: string; target: string }>({
+    name: '',
+    content: '',
+    target: 'mihomo',
+  })
   const [isNew, setIsNew] = useState(false)
   const [issues, setIssues] = useState<{ line: number; message: string }[] | null>(null)
   const [checking, setChecking] = useState(false)
@@ -28,7 +33,7 @@ export function TemplatesPage() {
   useEffect(() => {
     if (isNew) return
     if (active) {
-      setDraft({ name: active.name, content: active.content })
+      setDraft({ name: active.name, content: active.content, target: active.target || 'mihomo' })
       setIssues(null)
       setError('')
     }
@@ -39,6 +44,7 @@ export function TemplatesPage() {
     setActiveId(null)
     setDraft({
       name: '新模板',
+      target: 'mihomo',
       content:
         'mixed-port: 7890\nallow-lan: false\nmode: rule\nlog-level: info\nexternal-controller: 127.0.0.1:9090\n\nproxies:\n\nproxy-groups:\n  - name: PROXY\n    type: select\n    proxies:\n      - DIRECT\n\nrules:\n  - MATCH,PROXY\n',
     })
@@ -56,7 +62,7 @@ export function TemplatesPage() {
       if (isNew) {
         const created = await api.post<Template>('/api/templates', {
           name: draft.name,
-          target: 'mihomo',
+          target: draft.target,
           content: draft.content,
         })
         toast('success', '模板已创建')
@@ -66,7 +72,7 @@ export function TemplatesPage() {
       } else if (active) {
         await api.put(`/api/templates/${active.id}`, {
           name: draft.name,
-          target: active.target,
+          target: draft.target,
           content: draft.content,
         })
         toast('success', '模板已保存')
@@ -127,15 +133,15 @@ export function TemplatesPage() {
     }
   }
 
-  const lineCount = draft.content.split('\n').length
+  const lang = draft.target === 'sing-box' ? 'json' : draft.target === 'loon' ? 'ini' : 'yaml'
 
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <SectionLabel>workspace / templates</SectionLabel>
-          <h1 className="mt-1 text-base font-semibold tracking-tight">模板管理</h1>
-          <p className="mt-1 text-[12.5px] text-zinc-500">
+          <h1 className="mt-1 text-page font-semibold tracking-tight">模板管理</h1>
+          <p className="mt-1 text-[0.7812rem] text-fg-muted">
             粘贴完整的 Mihomo 配置，SubS 只替换其中的 proxies 与节点列表，其余原样保留。
           </p>
         </div>
@@ -161,11 +167,11 @@ export function TemplatesPage() {
                 }
               />
             ) : (
-              <ul className="overflow-hidden rounded-lg border border-zinc-800">
+              <ul className="overflow-hidden rounded-lg border border-line">
                 {isNew && (
-                  <li className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-800/40 px-3 py-2.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-                    <span className="truncate text-[12.5px] text-zinc-100">{draft.name || '未命名'}</span>
+                  <li className="flex items-center gap-2 border-b border-line bg-raised/40 px-3 py-2.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                    <span className="truncate text-[0.7812rem] text-fg">{draft.name || '未命名'}</span>
                     <Badge tone="cyan">草稿</Badge>
                   </li>
                 )}
@@ -178,13 +184,13 @@ export function TemplatesPage() {
                         setActiveId(t.id)
                       }}
                       className={`flex w-full flex-col gap-0.5 px-3 py-2.5 text-left transition-colors ${
-                        activeId === t.id && !isNew ? 'bg-zinc-800/60' : 'hover:bg-zinc-900/60'
+                        activeId === t.id && !isNew ? 'bg-raised/60' : 'hover:bg-surface/60'
                       }`}
                     >
-                      <span className="truncate text-[12.5px] text-zinc-200">{t.name}</span>
-                      <span className="mono flex items-center gap-1.5 text-[10.5px] text-zinc-500">
+                      <span className="truncate text-[0.7812rem] text-fg">{t.name}</span>
+                      <span className="mono flex items-center gap-1.5 text-[0.6562rem] text-fg-muted">
                         {t.target}
-                        <span className="text-zinc-700">·</span>
+                        <span className="text-fg-subtle">·</span>
                         {relativeTime(t.lastCheck)}
                       </span>
                     </button>
@@ -196,18 +202,28 @@ export function TemplatesPage() {
 
           <section className="min-w-0 space-y-3">
             {!active && !isNew ? (
-              <div className="card flex h-64 items-center justify-center text-[12.5px] text-zinc-500">
+              <div className="card flex h-64 items-center justify-center text-[0.7812rem] text-fg-muted">
                 从左侧选择一个模板开始编辑
               </div>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <input
-                    className="input h-10 min-w-0 flex-1 text-[13px]"
+                    className="input h-10 min-w-0 flex-1 text-[0.8125rem]"
                     value={draft.name}
                     onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                     aria-label="模板名称"
                   />
+                  <select
+                    className="input h-12 w-32"
+                    value={draft.target}
+                    onChange={(e) => setDraft({ ...draft, target: e.target.value })}
+                    aria-label="目标客户端"
+                  >
+                    <option value="mihomo">Mihomo</option>
+                    <option value="sing-box">sing-box</option>
+                    <option value="loon">Loon</option>
+                  </select>
                   <button type="button" className="btn btn-ghost" onClick={validate} disabled={checking || !active}>
                     {checking ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} 校验
                   </button>
@@ -218,7 +234,7 @@ export function TemplatesPage() {
                     <button
                       type="button"
                       aria-label="删除模板"
-                      className="btn btn-ghost px-2.5 text-zinc-500 hover:text-red-300"
+                      className="btn btn-ghost px-2.5 text-fg-muted hover:text-danger"
                       onClick={() => remove(active)}
                     >
                       <Trash2 size={14} />
@@ -232,30 +248,30 @@ export function TemplatesPage() {
                   <div
                     className={`rounded-md border px-3 py-2 ${
                       issues.length === 0
-                        ? 'border-emerald-400/30 bg-emerald-400/5'
-                        : 'border-red-400/30 bg-red-400/5'
+                        ? 'border-success/30 bg-success/5'
+                        : 'border-danger/30 bg-danger/5'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 text-[12px]">
+                    <div className="flex items-center gap-1.5 text-[0.75rem]">
                       {issues.length === 0 ? (
                         <>
-                          <Check size={13} className="text-emerald-400" />
-                          <span className="text-emerald-200">校验通过：结构、占位符与节点引用均正常</span>
+                          <Check size={13} className="text-success" />
+                          <span className="text-success">校验通过：结构、占位符与节点引用均正常</span>
                         </>
                       ) : (
                         <>
-                          <TriangleAlert size={13} className="text-red-400" />
-                          <span className="text-red-200">{issues.length} 个问题</span>
+                          <TriangleAlert size={13} className="text-danger" />
+                          <span className="text-danger">{issues.length} 个问题</span>
                         </>
                       )}
                     </div>
                     {issues.length > 0 && (
                       <ul className="mt-1.5 space-y-0.5">
                         {issues.map((i, idx) => (
-                          <li key={idx} className="mono flex items-start gap-1.5 text-[11.5px] text-red-200/90">
+                          <li key={idx} className="mono flex items-start gap-1.5 text-[0.7188rem] text-danger/90">
                             <X size={11} className="mt-0.5 shrink-0" />
                             <span>
-                              {i.line > 0 && <span className="text-red-400/70">第 {i.line} 行 · </span>}
+                              {i.line > 0 && <span className="text-danger/70">第 {i.line} 行 · </span>}
                               {i.message}
                             </span>
                           </li>
@@ -265,33 +281,28 @@ export function TemplatesPage() {
                   </div>
                 )}
 
-                <div className="relative">
-                  <textarea
-                    className="mono h-[520px] w-full resize-y rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-[11.5px] leading-[1.65] text-zinc-300 outline-none focus:border-cyan-400/40 focus:ring-1 focus:ring-cyan-400/20"
-                    value={draft.content}
-                    onChange={(e) => setDraft({ ...draft, content: e.target.value })}
-                    spellCheck={false}
-                    aria-label="模板内容"
-                  />
-                  <div className="mono pointer-events-none absolute bottom-2 right-3 rounded bg-zinc-900/90 px-1.5 py-0.5 text-[10.5px] text-zinc-500">
-                    {lineCount} 行 · YAML
-                  </div>
-                </div>
+                <CodeEditor
+                  value={draft.content}
+                  onChange={(content) => setDraft({ ...draft, content })}
+                  language={lang}
+                  ariaLabel="模板内容"
+                  footer={draft.target}
+                />
 
-                <details className="rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-[11.5px] text-zinc-400">
-                  <summary className="cursor-pointer text-zinc-300">占位符说明</summary>
-                  <ul className="mono mt-2 space-y-1 text-[11px]">
+                <details className="rounded-md border border-line bg-surface/40 px-3 py-2 text-[0.7188rem] text-fg-muted">
+                  <summary className="cursor-pointer text-fg-soft">占位符说明</summary>
+                  <ul className="mono mt-2 space-y-1 text-[0.6875rem]">
                     <li>
-                      <code className="text-cyan-300"># subs:proxies</code> — 节点定义注入点（可选；
+                      <code className="text-accent"># subs:proxies</code> — 节点定义注入点（可选；
                       未标注时自动替换顶层 <code>proxies:</code>）
                     </li>
                     <li>
-                      <code className="text-cyan-300"># subs:nodes</code> — 代理组内节点名列表注入点
+                      <code className="text-accent"># subs:nodes</code> — 代理组内节点名列表注入点
                     </li>
                     <li>
-                      <code className="text-cyan-300"># subs:names</code> — 同上，用于需要全量节点名的组
+                      <code className="text-accent"># subs:names</code> — 同上，用于需要全量节点名的组
                     </li>
-                    <li className="text-zinc-500">
+                    <li className="text-fg-muted">
                       使用 <code>include-all: true</code> 的组无需占位符，会自动包含所有节点。
                     </li>
                   </ul>
@@ -322,9 +333,9 @@ function ConfirmModal({
       aria-modal="true"
       onClick={() => onClose(false)}
     >
-      <div className="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-900 p-4" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-[13.5px] font-semibold">{request.title}</h2>
-        {request.description && <p className="mt-1.5 text-[12.5px] text-zinc-400">{request.description}</p>}
+      <div className="w-full max-w-sm rounded-lg border border-line bg-surface p-4" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-[0.8438rem] font-semibold">{request.title}</h2>
+        {request.description && <p className="mt-1.5 text-[0.7812rem] text-fg-muted">{request.description}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" className="btn btn-ghost" onClick={() => onClose(false)}>
             取消

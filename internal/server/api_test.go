@@ -255,6 +255,28 @@ func TestSubscriptionNegotiatesByUA(t *testing.T) {
 		t.Errorf("cache-control=%q", cc)
 	}
 
+	// ?target= 覆盖 UA 协商，?download=1 切换为附件下载。
+	override := func(query, ua string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "/s/"+p.Token+query, nil)
+		r.Header.Set("User-Agent", ua)
+		w := httptest.NewRecorder()
+		c.h.ServeHTTP(w, r)
+		return w
+	}
+	sb := override("?target=sing-box&download=1", "clash-verge/1.0")
+	if sb.Code != 200 || !json.Valid(sb.Body.Bytes()) {
+		t.Fatalf("target override must beat UA: status=%d body=%s", sb.Code, sb.Body.String())
+	}
+	if ct := sb.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("override content-type=%q", ct)
+	}
+	if cd := sb.Header().Get("Content-Disposition"); !strings.Contains(cd, "attachment") || !strings.Contains(cd, "subs.json") {
+		t.Errorf("download disposition=%q", cd)
+	}
+	if bad := override("?target=bogus", "clash-verge/1.0"); bad.Code != 400 {
+		t.Errorf("invalid target should 400, got %d", bad.Code)
+	}
+
 	// Unknown token must 404 identically.
 	r := httptest.NewRequest(http.MethodGet, "/s/nonexistent", nil)
 	w := httptest.NewRecorder()
