@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/wucai/subs/internal/secrets"
 	"github.com/wucai/subs/internal/server"
 	"github.com/wucai/subs/internal/store"
 )
@@ -32,7 +33,11 @@ func main() {
 		log.Fatalf("open store: %v", err)
 	}
 	defer db.Close()
-	srv := &server.Server{Store: db, InitToken: *initToken}
+	box, err := secrets.LoadOrCreateBox(*dataDir)
+	if err != nil {
+		log.Fatalf("load secrets: %v", err)
+	}
+	srv := &server.Server{Store: db, InitToken: *initToken, Box: box, DataDir: *dataDir, DBPath: dbPath}
 	log.Printf("subs listening on %s", *addr)
 	if err = http.ListenAndServe(*addr, srv.Router()); err != nil {
 		log.Fatalf("http server: %v", err)

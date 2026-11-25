@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -61,4 +62,29 @@ func (s *Store) WithBackup(ctx context.Context, fn func(*sql.DB) error) error {
 	s.backupMu.Lock()
 	defer s.backupMu.Unlock()
 	return fn(s.db)
+}
+
+// ReplaceWith closes the current database, moves the replacement file into
+// place and reopens. Callers must ensure no other request is mid-flight.
+func (s *Store) ReplaceWith(ctx context.Context, newPath, dbPath string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.backupMu.Lock()
+	defer s.backupMu.Unlock()
+	if err := s.db.Close(); err != nil {
+		return err
+	}
+	// WAL and shared-memory files belong to the old database.
+	for _, suffix := range []string{"-wal", "-shm"} {
+		_ = os.Remove(dbPath + suffix)
+	}
+	if err := os.Rename(newPath, dbPath); err != nil {
+		return err
+	}
+	reopened, err := Open(dbPath)
+	if err != nil {
+		return err
+	}
+	s.db = reopened.db
+	return nil
 }

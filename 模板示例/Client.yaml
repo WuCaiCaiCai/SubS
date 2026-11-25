@@ -1,0 +1,394 @@
+# ====================================================
+# Mihomo / Clash Meta 移动客户端完整配置文件 (与主路由规则对齐版)
+# ====================================================
+
+# 基础端口与控制
+port: 7890
+socks-port: 7891
+allow-lan: false
+bind-address: "*"
+mode: Rule
+log-level: warning
+external-controller: 127.0.0.1:9090
+
+# ----------------------------------------------------
+# █ 内核性能与移动端省电优化
+# ----------------------------------------------------
+unified-delay: true                  # 统一延迟计算
+tcp-concurrent: true                 # TCP 并行握手
+global-client-fingerprint: chrome    # 伪装 Chrome TLS 指纹
+keep-alive-interval: 30              # 移动端适当放宽心跳间隔以省电
+find-process-mode: off               # 关闭高频进程扫描，降低手机端耗电
+geodata-mode: true                   # 启用 geodata 模式
+geodata-loader: standard             # 兼容 GEOIP 与 GEOSITE 的标准加载器
+geosite-matcher: strand
+
+# ----------------------------------------------------
+# █ 核心数据源下载配置 (Loyalsoldier v2ray-rules-dat)
+# ----------------------------------------------------
+geox-url:
+  geoip: "https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat"
+  geosite: "https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat"
+  mmdb: "https://testingcf.jsdelivr.net/gh/Hackl0us/GeoIP2-CN@release/Country.mmdb"
+
+# 策略组选择状态持久化
+profile:
+  store-selected: true
+
+# ----------------------------------------------------
+# █ 流量嗅探 (TLS / HTTP / QUIC 域名精准识别)
+# ----------------------------------------------------
+sniffer:
+  enable: true
+  forced-dns-mapping: true
+  parse-pure-ip: true
+  sniff:
+    tls:
+      ports: [443, 8443]
+    http:
+      ports: [80, 8080-8090]
+    quic:
+      ports: [443, 8443]
+
+# ----------------------------------------------------
+# █ DNS 配置 (移动端 Fake-IP 双栈抗切换污染优化)
+# ----------------------------------------------------
+dns:
+  enable: true
+  ipv6: true
+  respect-rules: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter-v6: "2800:1::/48"
+
+  proxy-server-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+
+  nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+    - 119.29.29.29
+    - 223.5.5.5
+
+  fake-ip-filter:
+    - "*.lan"
+    - "*.local"
+    - "*.internal"
+    - localhost.ptlogin2.qq.com
+    - "+.stun.*"
+    - "+.bilibili.com"
+    - "time.*.com"
+    - "time.*.gov"
+    - "ntp.*.com"
+    - "+.push.apple.com"
+    - "+.msftconnecttest.com"
+    - "+.msftncsi.com"
+
+# ----------------------------------------------------
+# 保留订阅节点 (由客户端自动合并注入)
+# ----------------------------------------------------
+proxies: ~
+
+# ----------------------------------------------------
+# 策略组定义 (还原 Stable/HighSpeed/BulkDownload 默认跟 All)
+# ----------------------------------------------------
+proxy-groups:
+  # 全局兜底选择组
+  - name: All
+    type: select
+    include-all: true
+    proxies:
+      - DIRECT
+
+  # 稳定优先：默认跟 All，可选 DIRECT 与全部节点
+  - name: Stable
+    type: select
+    include-all: true
+    proxies:
+      - All
+      - DIRECT
+
+  # 速度优先：默认跟 All，可选 DIRECT 与全部节点
+  - name: HighSpeed
+    type: select
+    include-all: true
+    proxies:
+      - All
+      - DIRECT
+
+  # 大流量/下载优先：默认跟 All，可选 DIRECT 与全部节点
+  - name: BulkDownload
+    type: select
+    include-all: true
+    proxies:
+      - All
+      - DIRECT
+
+  # Microsoft 分组：默认 Stable，可选 DIRECT
+  - name: Microsoft
+    type: select
+    proxies:
+      - Stable
+      - DIRECT
+
+  # Apple 分组：默认 Stable，可选 DIRECT
+  - name: Apple
+    type: select
+    proxies:
+      - Stable
+      - DIRECT
+
+  # XBOX 下载分组：默认 DIRECT，可选 BulkDownload
+  - name: XBOX
+    type: select
+    proxies:
+      - DIRECT
+      - BulkDownload
+
+# ====================================================
+# 路由分流规则
+# ====================================================
+rules:
+
+  # ----------------------------------------------------
+  # █ 0. 自定义 / 私有服务
+  # ----------------------------------------------------
+  - DOMAIN,xyemby.kingba.com,DIRECT
+  - DOMAIN,emby.wucai.space,DIRECT
+  - DOMAIN-SUFFIX,wucai.space,DIRECT
+  - DOMAIN-SUFFIX,n1.fnat.cc,DIRECT
+  - DOMAIN-SUFFIX,vban.xyz,HighSpeed
+  - DOMAIN-SUFFIX,proraincut.v6.army,All
+
+  - GEOSITE,tmdb,HighSpeed
+  - DOMAIN-SUFFIX,themoviedb.org,HighSpeed
+  - DOMAIN-SUFFIX,tmdb.org,HighSpeed
+  - DOMAIN-SUFFIX,tmdb.org.edgesuite.net,HighSpeed
+  - DOMAIN-KEYWORD,themoviedb,HighSpeed
+  - DOMAIN-KEYWORD,tmdb,HighSpeed
+  - DOMAIN-SUFFIX,fanart.tv,HighSpeed
+  - DOMAIN-SUFFIX,thetvdb.com,HighSpeed
+  - DOMAIN-SUFFIX,omdbapi.com,HighSpeed
+  - DOMAIN-SUFFIX,trakt.tv,HighSpeed
+
+  - GEOSITE,telegram,HighSpeed
+  - GEOIP,telegram,HighSpeed
+  - DOMAIN-SUFFIX,t.me,HighSpeed
+  - DOMAIN-SUFFIX,tdesktop.com,HighSpeed
+  - DOMAIN-SUFFIX,telegra.ph,HighSpeed
+  - DOMAIN-SUFFIX,telegram.me,HighSpeed
+  - DOMAIN-SUFFIX,telegram.org,HighSpeed
+  - DOMAIN-SUFFIX,telesco.pe,HighSpeed
+  - DOMAIN-KEYWORD,telegram,HighSpeed
+
+  # ----------------------------------------------------
+  # █ 1. 本地网络 & 局域网私网地址 (直连)
+  # ----------------------------------------------------
+  - GEOIP,private,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR6,fc00::/7,DIRECT,no-resolve
+
+  # ----------------------------------------------------
+  # █ 2. 广告 / 追踪行为拦截
+  # ----------------------------------------------------
+  - GEOSITE,category-ads,REJECT
+  - DOMAIN-KEYWORD,doubleclick,REJECT
+  - DOMAIN-KEYWORD,adservice,REJECT
+
+  # ----------------------------------------------------
+  # █ 2.5 YouTube 优先分流 (必须放在 Google 之前，防止被 GEOSITE,google 拦截)
+  # ----------------------------------------------------
+  - GEOSITE,youtube,HighSpeed
+  - DOMAIN-SUFFIX,googlevideo.com,HighSpeed
+  - DOMAIN-SUFFIX,youtube.com,HighSpeed
+  - DOMAIN-SUFFIX,ytimg.com,HighSpeed
+  - DOMAIN-SUFFIX,youtu.be,HighSpeed
+
+  # ----------------------------------------------------
+  # █ 3. AI 人工智能服务 (稳定优先)
+  # ----------------------------------------------------
+  - GEOSITE,openai,Stable
+  - GEOSITE,anthropic,Stable
+  - GEOSITE,google,Stable
+  - DOMAIN-SUFFIX,play.google.com,Stable
+  - DOMAIN-SUFFIX,android.com,Stable
+  - DOMAIN-SUFFIX,androidify.com,Stable
+  - DOMAIN-SUFFIX,appspot.com,Stable
+  - DOMAIN-SUFFIX,g.co,Stable
+  - DOMAIN-SUFFIX,ggpht.com,Stable
+  - DOMAIN-SUFFIX,google.com,Stable
+  - DOMAIN-SUFFIX,googleapis.com,Stable
+  - DOMAIN-SUFFIX,googleapis.cn,Stable
+  - DOMAIN-SUFFIX,gstatic.com,Stable
+  - DOMAIN-SUFFIX,gstatic.cn,Stable
+  - DOMAIN-SUFFIX,googleusercontent.com,Stable
+  - DOMAIN-SUFFIX,googlezip.net,Stable
+  - DOMAIN-SUFFIX,gvt0.com,Stable
+  - DOMAIN-SUFFIX,gvt1.com,Stable
+  - DOMAIN-SUFFIX,gvt2.com,Stable
+  - DOMAIN-SUFFIX,gvt3.com,Stable
+  - DOMAIN-SUFFIX,1e100.net,Stable
+
+  - DOMAIN-SUFFIX,chatgpt.com,Stable
+  - DOMAIN-SUFFIX,openai.com,Stable
+  - DOMAIN-SUFFIX,oaistatic.com,Stable
+  - DOMAIN-SUFFIX,oaiusercontent.com,Stable
+  - DOMAIN-SUFFIX,claude.ai,Stable
+  - DOMAIN-SUFFIX,anthropic.com,Stable
+
+  - DOMAIN-SUFFIX,grok.com,Stable
+  - DOMAIN-SUFFIX,x.ai,Stable
+  - DOMAIN-SUFFIX,perplexity.ai,Stable
+
+  # ----------------------------------------------------
+  # █ 4. 高质量海外服务 (速度优先)
+  # ----------------------------------------------------
+  - GEOSITE,github,HighSpeed
+  - DOMAIN-SUFFIX,github.com,HighSpeed
+  - DOMAIN-SUFFIX,githubusercontent.com,HighSpeed
+
+  - GEOSITE,twitter,HighSpeed
+  - GEOSITE,discord,HighSpeed
+
+  - GEOSITE,netflix,HighSpeed
+  - DOMAIN-SUFFIX,nflxvideo.net,HighSpeed
+  - DOMAIN-SUFFIX,nflxext.com,HighSpeed
+  - DOMAIN-SUFFIX,nflximg.net,HighSpeed
+  - DOMAIN-SUFFIX,nflximg.ar,HighSpeed
+
+  - GEOSITE,disney,HighSpeed
+  - DOMAIN-SUFFIX,disneyplus.com,HighSpeed
+  - DOMAIN-SUFFIX,bamgrid.com,HighSpeed
+
+  - GEOSITE,spotify,HighSpeed
+  - DOMAIN-SUFFIX,scdn.co,HighSpeed
+  - DOMAIN-SUFFIX,spotifycdn.com,HighSpeed
+
+  - GEOSITE,bahamut,HighSpeed
+  - DOMAIN-SUFFIX,bahamut.akamaized.net,HighSpeed
+
+  # ----------------------------------------------------
+  # █ 5. 大流量下载 & P2P 传输
+  # ----------------------------------------------------
+  - GEOSITE,pikpak,BulkDownload
+  - DOMAIN-KEYWORD,torrent,BulkDownload
+  - DOMAIN-KEYWORD,announce,BulkDownload
+
+  # ----------------------------------------------------
+  # █ 6. 国内游戏 / 娱乐媒体 (直连)
+  # ----------------------------------------------------
+  - GEOSITE,category-games@cn,DIRECT
+  - GEOSITE,bilibili@cn,DIRECT
+  - GEOSITE,bilibili,DIRECT
+
+  # ----------------------------------------------------
+  # █ 7. Steam 精细分流
+  # ----------------------------------------------------
+  # 7.1 Steam 下载 CDN (直连)
+  - GEOSITE,steam@cn,DIRECT
+  - DOMAIN-SUFFIX,steamcontent.com,DIRECT
+  - DOMAIN-SUFFIX,steamserver.net,DIRECT
+  - DOMAIN-SUFFIX,steamcdn-a.akamaihd.net,DIRECT
+  - DOMAIN-SUFFIX,akamaihd.net,DIRECT
+  - DOMAIN-SUFFIX,akamaized.net,DIRECT
+  - DOMAIN-SUFFIX,cloudfront.net,DIRECT
+  - DOMAIN,fastly.cdn.steampipe.steamcontent.com,DIRECT
+  - DOMAIN-KEYWORD,steamcontent,DIRECT
+  - DOMAIN-KEYWORD,steamvideo,DIRECT
+
+  # 7.2 Steam 商店 / 社区 / 聊天 (走大流量下载分组)
+  - DOMAIN-SUFFIX,store.steampowered.com,BulkDownload
+  - DOMAIN-SUFFIX,steamcommunity.com,BulkDownload
+  - DOMAIN-SUFFIX,steampowered.com,BulkDownload
+  - DOMAIN-SUFFIX,steamapi.com,BulkDownload
+  - DOMAIN-SUFFIX,steam-chat.com,BulkDownload
+  - DOMAIN-SUFFIX,community.cloudflare.steamstatic.com,BulkDownload
+
+  # 7.3 Steam 下载 CDN IP 网段 (直连)
+  - IP-CIDR,45.121.184.0/24,DIRECT,no-resolve
+  - IP-CIDR,103.10.124.0/23,DIRECT,no-resolve
+  - IP-CIDR,103.28.54.0/24,DIRECT,no-resolve
+  - IP-CIDR,146.66.152.0/24,DIRECT,no-resolve
+  - IP-CIDR,146.66.155.0/24,DIRECT,no-resolve
+  - IP-CIDR,153.254.86.0/24,DIRECT,no-resolve
+  - IP-CIDR,155.133.224.0/22,DIRECT,no-resolve
+  - IP-CIDR,155.133.230.0/24,DIRECT,no-resolve
+  - IP-CIDR,155.133.232.0/23,DIRECT,no-resolve
+  - IP-CIDR,155.133.234.0/24,DIRECT,no-resolve
+  - IP-CIDR,155.133.236.0/22,DIRECT,no-resolve
+  - IP-CIDR,155.133.240.0/23,DIRECT,no-resolve
+  - IP-CIDR,155.133.244.0/23,DIRECT,no-resolve
+  - IP-CIDR,155.133.246.0/24,DIRECT,no-resolve
+  - IP-CIDR,155.133.248.0/21,DIRECT,no-resolve
+  - IP-CIDR,162.254.192.0/21,DIRECT,no-resolve
+  - IP-CIDR,185.25.182.0/23,DIRECT,no-resolve
+  - IP-CIDR,190.217.32.0/22,DIRECT,no-resolve
+  - IP-CIDR,192.69.96.0/22,DIRECT,no-resolve
+  - IP-CIDR,205.196.6.0/24,DIRECT,no-resolve
+  - IP-CIDR,208.64.200.0/22,DIRECT,no-resolve
+  - IP-CIDR,208.78.164.0/22,DIRECT,no-resolve
+  - IP-CIDR,205.185.194.0/24,DIRECT,no-resolve
+
+  # ----------------------------------------------------
+  # █ 7.5 Xbox / 微软商店大文件下载 CDN (默认 DIRECT，可选 BulkDownload)
+  # ----------------------------------------------------
+  - DOMAIN-SUFFIX,assets1.xboxlive.cn,XBOX
+  - DOMAIN-SUFFIX,assets2.xboxlive.cn,XBOX
+  - DOMAIN-SUFFIX,assets1.xboxlive.com,XBOX
+  - DOMAIN-SUFFIX,assets2.xboxlive.com,XBOX
+  - DOMAIN-SUFFIX,dlassets.xboxlive.com,XBOX
+  - DOMAIN-SUFFIX,dlassets2.xboxlive.com,XBOX
+  - DOMAIN-SUFFIX,d1.xboxlive.com,XBOX
+  - DOMAIN-SUFFIX,d2.xboxlive.com,XBOX
+  - DOMAIN-SUFFIX,xvcf1.xboxlive.com,XBOX
+  - DOMAIN-SUFFIX,xvcf2.xboxlive.com,XBOX
+  - DOMAIN-SUFFIX,dl.delivery.mp.microsoft.com,XBOX
+  - DOMAIN-SUFFIX,tlu.dl.delivery.mp.microsoft.com,XBOX
+
+  # ----------------------------------------------------
+  # █ 8. 微软生态 & Apple 生态 & 国内大厂直连
+  # ----------------------------------------------------
+  # 微软账户、Store、Rewards 定位及 Xbox 联机服务 (默认 Stable，可选 DIRECT)
+  - DOMAIN-SUFFIX,rewards.bing.com,Microsoft
+  - DOMAIN-SUFFIX,bing.com,Microsoft
+  - DOMAIN-KEYWORD,rewards,Microsoft
+  - GEOSITE,xbox@cn,Microsoft
+  - GEOSITE,xbox,Microsoft
+  - DOMAIN-SUFFIX,xbox.com,Microsoft
+  - DOMAIN-SUFFIX,xboxlive.com,Microsoft
+  - DOMAIN-SUFFIX,gamepass.com,Microsoft
+  - DOMAIN-SUFFIX,xboxab.com,Microsoft
+  - DOMAIN-SUFFIX,xboxservices.com,Microsoft
+  - DOMAIN-KEYWORD,xboxlive,Microsoft
+  - GEOSITE,microsoft,Microsoft
+
+  # OneDrive 保持独立直连
+  - GEOSITE,onedrive,DIRECT
+
+  # Apple 认证及核心服务 (移动端 App Store / iCloud 登录必备，默认 Stable，可选 DIRECT)
+  - DOMAIN-SUFFIX,gsa.apple.com,Apple
+  - DOMAIN-SUFFIX,gsas.apple.com,Apple
+  - DOMAIN-SUFFIX,idmsa.apple.com,Apple
+  - DOMAIN-SUFFIX,developer.apple.com,Apple
+  - DOMAIN-SUFFIX,developerservices2.apple.com,Apple
+  - DOMAIN-SUFFIX,appstoreconnect.apple.com,Apple
+  - DOMAIN-SUFFIX,albert.apple.com,Apple
+  - DOMAIN-SUFFIX,ocsp.apple.com,Apple
+  - DOMAIN-SUFFIX,ocsp2.apple.com,Apple
+  - DOMAIN-SUFFIX,valid.apple.com,Apple
+  - DOMAIN-SUFFIX,appleid.apple.com,Apple
+  - DOMAIN-SUFFIX,appleid.cdn-apple.com,Apple
+
+  - GEOSITE,apple@cn,DIRECT
+  - GEOSITE,apple,DIRECT
+
+  - GEOSITE,cn,DIRECT
+  - GEOIP,CN,DIRECT
+
+  # ----------------------------------------------------
+  # █ 9. 规则未命中兜底
+  # ----------------------------------------------------
+  - MATCH,All

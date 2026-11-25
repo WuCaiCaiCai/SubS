@@ -30,6 +30,10 @@ const sessionKey ctxKey = "session"
 type Server struct {
 	Store         *store.Store
 	InitToken     string
+	Box           *secrets.Box
+	DataDir       string
+	DBPath        string
+	Backups       backupStore
 	loginMu       sync.Mutex
 	loginAttempts map[string][]time.Time
 }
@@ -38,6 +42,13 @@ type apiError struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+func (s *Server) box() (*secrets.Box, error) {
+	if s.Box == nil {
+		return nil, errors.New("加密密钥未初始化")
+	}
+	return s.Box, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -73,7 +84,44 @@ func (s *Server) Router() http.Handler {
 		r.Use(s.requireAuth)
 		r.Get("/api/system", s.system)
 		r.Put("/api/system/listen", s.csrf(s.listen))
+		r.Get("/api/airports", s.listAirports)
+		r.Post("/api/airports", s.csrf(s.createAirport))
+		r.Get("/api/airports/{id}", s.getAirport)
+		r.Put("/api/airports/{id}", s.csrf(s.updateAirport))
+		r.Delete("/api/airports/{id}", s.csrf(s.deleteAirport))
+		r.Post("/api/airports/{id}/refresh", s.csrf(s.refreshAirport))
+		r.Get("/api/servers", s.listServers)
+		r.Post("/api/servers", s.csrf(s.createServer))
+		r.Get("/api/servers/{id}", s.getServer)
+		r.Put("/api/servers/{id}", s.csrf(s.updateServer))
+		r.Delete("/api/servers/{id}", s.csrf(s.deleteServer))
+		r.Get("/api/nodes", s.listNodes)
+		r.Post("/api/nodes", s.csrf(s.createNode))
+		r.Post("/api/nodes/import", s.csrf(s.importNodes))
+		r.Get("/api/nodes/{id}", s.getNode)
+		r.Put("/api/nodes/{id}", s.csrf(s.updateNode))
+		r.Delete("/api/nodes/{id}", s.csrf(s.deleteNode))
+		r.Get("/api/templates", s.listTemplates)
+		r.Post("/api/templates", s.csrf(s.createTemplate))
+		r.Get("/api/templates/{id}", s.getTemplate)
+		r.Put("/api/templates/{id}", s.csrf(s.updateTemplate))
+		r.Delete("/api/templates/{id}", s.csrf(s.deleteTemplate))
+		r.Post("/api/templates/{id}/validate", s.csrf(s.validateTemplate))
+		r.Get("/api/profiles", s.listProfiles)
+		r.Post("/api/profiles", s.csrf(s.createProfile))
+		r.Get("/api/profiles/{id}", s.getProfile)
+		r.Put("/api/profiles/{id}", s.csrf(s.updateProfile))
+		r.Delete("/api/profiles/{id}", s.csrf(s.deleteProfile))
+		r.Put("/api/profiles/{id}/nodes", s.csrf(s.setProfileNodes))
+		r.Post("/api/profiles/{id}/preview", s.csrf(s.previewProfile))
+		r.Post("/api/profiles/{id}/rotate-token", s.csrf(s.rotateToken))
+		r.Get("/api/profiles/{id}/naming-preview", s.namingPreview)
+		r.Post("/api/backup", s.csrf(s.createBackup))
+		r.Get("/api/backup/{id}", s.downloadBackup)
+		r.Post("/api/restore", s.csrf(s.restoreBackup))
+		r.Post("/api/destroy", s.csrf(s.destroy))
 	})
+	r.Get("/s/{token}", s.subscription)
 	r.Get("/admin/*", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", http.StatusTemporaryRedirect) })
 	r.Get("/*", s.serveFrontend)
 	return r
