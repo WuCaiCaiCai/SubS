@@ -98,20 +98,18 @@ mkdir -p "$DATA_DIR"
 chown -R "${SERVICE}:${SERVICE}" "$DATA_DIR"
 chmod 700 "$DATA_DIR"
 
-# 必须在启动服务前生成：服务一跑起来就会建库，之后再判断“是否首次安装”
-# 永远为假，密钥会被跳过。密钥写入 0600 文件，由程序启动时自行读取。
+# 密钥是否已存在只看文件本身：早期版本装过但没写密钥的机器，数据库早已存在，
+# 若用 subs.db 判断“是否首次安装”会永远跳过生成，导致本来无法初始化。
 INIT_TOKEN=""
-if [[ ! -e "$DATA_DIR/subs.db" && ! -e "$DATA_DIR/init-token" ]]; then
+if [[ -r "$DATA_DIR/init-token" ]]; then
+  INIT_TOKEN="$(tr -d '\n' <"$DATA_DIR/init-token")"
+fi
+if [[ -z "$INIT_TOKEN" ]]; then
   step "生成一次性初始化密钥"
   INIT_TOKEN="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | cut -c1-32)"
   printf '%s\n' "$INIT_TOKEN" >"$DATA_DIR/init-token"
   chown "${SERVICE}:${SERVICE}" "$DATA_DIR/init-token"
   chmod 600 "$DATA_DIR/init-token"
-else
-  # 升级重新跑脚本时密钥已存在，仍读出来展示，避免用户再 SSH 查文件。
-  if [[ -r "$DATA_DIR/init-token" ]]; then
-    INIT_TOKEN="$(tr -d '\n' <"$DATA_DIR/init-token")"
-  fi
 fi
 if [[ -f "$BIN_PATH" ]]; then
   step "已存在旧二进制，保留为 ${BIN_PATH}.old"
@@ -148,7 +146,9 @@ WantedBy=multi-user.target
 UNIT
 
 systemctl daemon-reload
-systemctl enable --now "$SERVICE"
+systemctl enable "$SERVICE"
+# 升级场景下服务已在运行，enable --now 不会重新加载 unit，必须显式 restart。
+systemctl restart "$SERVICE"
 
 # 监听在 0.0.0.0/:: 时探测回环地址，避免依赖具体网卡。
 PROBE_HOST="${LISTEN%:*}"
@@ -168,12 +168,23 @@ if [[ -n "$HEALTHY" ]]; then
 else
   warn "服务已安装但健康检查未通过，查看日志：journalctl -u ${SERVICE} -n 50"
 fi
+# 对外访问地址优先用出口 IP：绑定 0.0.0.0 时给回环地址无法从本机访问。
+PUBLIC_HOST=""
+case "$LISTEN_ADDR" in
+  0.0.0.0|"::"|""|"*")
+    PUBLIC_HOST="$(curl -fsS --max-time 3 https://api.ipify.org 2>/dev/null || true)"
+    [[ -n "$PUBLIC_HOST" ]] || PUBLIC_HOST="$(curl -fsS --max-time 3 https://ifconfig.me/ip 2>/dev/null || true)"
+    [[ -n "$PUBLIC_HOST" ]] || PUBLIC_HOST="$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p' | head -1)"
+    PUBLIC_HOST="${PUBLIC_HOST:-<本机IP>}"
+    ;;
+  *) PUBLIC_HOST="$LISTEN_ADDR" ;;
+esac
+
 cat <<INFO
 
-控制台：http://${PROBE_HOST}:${PROBE_PORT}/
-${INIT_TOKEN:+初始化密钥：${INIT_TOKEN}}
-${INIT_TOKEN:+  （请立即保存；首次初始化时与管理员密码一起提交）}
-${INIT_TOKEN:-初始化密钥已存在：${DATA_DIR}/init-token（已完成初始化则无需理会）}
+控制台：http://${PUBLIC_HOST}:${PROBE_PORT}/
+初始化密钥：${INIT_TOKEN}
+  （请立即保存；首次初始化时与管理员密码一起提交；文件 ${DATA_DIR}/init-token，权限 0600）
 
 常用命令：
   systemctl status ${SERVICE}

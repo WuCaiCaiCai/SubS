@@ -15,10 +15,10 @@ curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.
 3. 安装到 `/usr/local/bin/subs`（若已存在且版本不同，提示升级而非覆盖数据）
 4. 创建系统用户 `subs`（无登录 shell）
 5. 建数据目录 `/var/lib/subs/`（owner subs，0700）
-6. 生成一次性初始化密钥：写入 `/var/lib/subs/init-token`（0600，属主 subs），安装结束时直接打印在终端；程序启动时若未传 `--init-token` 则自动读取该文件
+6. 生成一次性初始化密钥：文件不存在即生成并写入 `/var/lib/subs/init-token`（0600，属主 subs），已存在则读取；两者都把明文打印在终端；程序启动时若未传 `--init-token` 则自动读取该文件
 7. 交互询问监听地址与端口：地址默认 `0.0.0.0`（对外直连），填 `127.0.0.1` 则仅本机 + 反代；端口默认 `8787`，校验 1-65535。也可用 `SUBS_BIND` / `SUBS_PORT` 预置，或用 `SUBS_LISTEN=host:port` 一次性指定
 8. 写 systemd unit（`/etc/systemd/system/subs.service`），`Restart=on-failure`，`ProtectSystem=strict` + `ReadWritePaths=/var/lib/subs`，`ExecStart` 带 `--data-dir` 与 `--listen`
-9. 启动服务并健康检查，输出访问地址、初始化密钥、防火墙放行提示与 HTTPS 反代警告
+9. `systemctl enable` + `restart`（升级时也能加载新 unit），健康检查后输出**对外 IP** 访问地址、初始化密钥、防火墙放行提示与 HTTPS 反代警告
 
 升级：重跑安装命令 → 备份数据库快照到 `/var/lib/subs/pre-upgrade-<ts>.db` → 替换二进制（旧的保留为 `/usr/local/bin/subs.old`）→ 重启；失败可手动回滚二进制。
 卸载：`subs uninstall` → 询问是否保留数据，停服务删 unit/二进制/用户，按选择处理数据目录。
