@@ -56,7 +56,7 @@ jobs:
           cp install.sh dist/release/install.sh
           cp configure-caddy.sh dist/release/configure-caddy.sh
           cd dist/release
-          sha256sum "subs_${version}_linux_amd64.tar.gz" > checksums.txt
+          sha256sum "subs_${version}_linux_amd64.tar.gz" configure-caddy.sh > checksums.txt
           cat checksums.txt
 
       - name: Publish GitHub Release
@@ -67,4 +67,5 @@ jobs:
             dist/release/subs_*_linux_amd64.tar.gz
             dist/release/checksums.txt
             dist/release/install.sh
+            dist/release/configure-caddy.sh
           generate_release_notes: true
