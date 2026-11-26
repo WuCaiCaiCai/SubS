@@ -73,6 +73,10 @@ tar -xzf "$WORK/$ASSET" -C "$WORK"
 
 DATA_DIR="$(ask "数据目录 [${DATA_DIR}]: " "$DATA_DIR")"
 
+# 监听地址：默认对外监听，反代与直连都能用；直连为明文 HTTP，因此在下面提示。
+LISTEN="${SUBS_LISTEN:-0.0.0.0:8787}"
+LISTEN="$(ask "监听地址（0.0.0.0:8787 对外直连 / 127.0.0.1:8787 仅本机 + 反代）[${LISTEN}]: " "$LISTEN")"
+
 if id "$SERVICE" >/dev/null 2>&1; then
   step "系统用户 ${SERVICE} 已存在"
 else
@@ -85,6 +89,21 @@ mkdir -p "$DATA_DIR"
 chown -R "${SERVICE}:${SERVICE}" "$DATA_DIR"
 chmod 700 "$DATA_DIR"
 
+# 必须在启动服务前生成：服务一跑起来就会建库，之后再判断“是否首次安装”
+# 永远为假，密钥会被跳过。密钥写入 0600 文件，由程序启动时自行读取。
+INIT_TOKEN=""
+if [[ ! -e "$DATA_DIR/subs.db" && ! -e "$DATA_DIR/init-token" ]]; then
+  step "生成一次性初始化密钥"
+  INIT_TOKEN="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | cut -c1-32)"
+  printf '%s\n' "$INIT_TOKEN" >"$DATA_DIR/init-token"
+  chown "${SERVICE}:${SERVICE}" "$DATA_DIR/init-token"
+  chmod 600 "$DATA_DIR/init-token"
+else
+  # 升级重新跑脚本时密钥已存在，仍读出来展示，避免用户再 SSH 查文件。
+  if [[ -r "$DATA_DIR/init-token" ]]; then
+    INIT_TOKEN="$(tr -d '\n' <"$DATA_DIR/init-token")"
+  fi
+fi
 if [[ -f "$BIN_PATH" ]]; then
   step "已存在旧二进制，保留为 ${BIN_PATH}.old"
   cp -f "$BIN_PATH" "${BIN_PATH}.old"
@@ -104,7 +123,7 @@ Wants=network-online.target
 Type=simple
 User=${SERVICE}
 Group=${SERVICE}
-ExecStart=${BIN_PATH} --data-dir ${DATA_DIR} --listen 127.0.0.1:8787
+ExecStart=${BIN_PATH} --data-dir ${DATA_DIR} --listen ${LISTEN}
 Restart=on-failure
 RestartSec=3
 ProtectSystem=strict
@@ -122,20 +141,15 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now "$SERVICE"
 
-INIT_TOKEN=""
-if [[ ! -e "$DATA_DIR/subs.db" && ! -e "$DATA_DIR/init-token" ]]; then
-  step "生成一次性初始化密钥"
-  INIT_TOKEN="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | cut -c1-32)"
-  printf '%s\n' "$INIT_TOKEN" >"$DATA_DIR/init-token"
-  chown "${SERVICE}:${SERVICE}" "$DATA_DIR/init-token"
-  chmod 600 "$DATA_DIR/init-token"
-fi
-
-PROBE_HOST=127.0.0.1
-PROBE_PORT=8787
+# 监听在 0.0.0.0/:: 时探测回环地址，避免依赖具体网卡。
+PROBE_HOST="${LISTEN%:*}"
+PROBE_PORT="${LISTEN##*:}"
+case "$PROBE_HOST" in
+  0.0.0.0|"::"|""|"*") PROBE_HOST=127.0.0.1 ;;
+esac
 HEALTHY=""
 for _ in $(seq 1 20); do
-  if curl -fsS -o /dev/null "http://${PROBE_HOST}:${PROBE_PORT}/healthz"; then HEALTHY=1; break; fi
+  if curl -fsS -o /dev/null "http://${PROBE_HOST}:${PROBE_PORT}/healthz" 2>/dev/null; then HEALTHY=1; break; fi
   sleep 0.5
 done
 
@@ -150,6 +164,7 @@ cat <<INFO
 控制台：http://${PROBE_HOST}:${PROBE_PORT}/
 ${INIT_TOKEN:+初始化密钥：${INIT_TOKEN}}
 ${INIT_TOKEN:+  （请立即保存；首次初始化时与管理员密码一起提交）}
+${INIT_TOKEN:-初始化密钥已存在：${DATA_DIR}/init-token（已完成初始化则无需理会）}
 
 常用命令：
   systemctl status ${SERVICE}
@@ -158,8 +173,9 @@ ${INIT_TOKEN:+  （请立即保存；首次初始化时与管理员密码一起�
   ${BIN_PATH} reset-password --data-dir ${DATA_DIR}
 
 注意：
-  · 默认只监听 127.0.0.1:8787；需更改请编辑 systemd unit 的 --listen 参数并重启
-  · 建议用 Nginx/Caddy 反代并启用 HTTPS 后再对外
+  · 当前监听 ${LISTEN}；需更改请编辑 systemd unit 的 --listen 参数并重启
+  · 直连是明文 HTTP：登录密码与订阅 token 会裸奔在公网，强烈建议用 Nginx/Caddy 反代并启用 HTTPS
+  · 若监听 0.0.0.0，需在云厂商安全组/防火墙放行 ${PROBE_PORT} 端口
   · 订阅链接中的节点信息是凭据，公开前务必确认域名不在公共索引里
   · 初始化密钥也保存在 ${DATA_DIR}/init-token（权限 0600）；升级时不会重置
   · 升级：重跑本脚本（会自动覆盖二进制并重启）

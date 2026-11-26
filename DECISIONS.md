@@ -11,3 +11,4 @@
 | 2025-11 | 协议支持：hy2 / VLESS / TUIC / AnyTLS / Mieru | Mieru 需检查 sing-box/Loon 支持度，见协议规范 |
 | 2025-11 | Web 框架选 **chi**（`github.com/go-chi/chi/v5`） | 比 net/http 原生路由更易写中间件链，轻量无依赖 |
 | 2025-11 | `airport.refresh_interval_min` **Phase 1 不启用后台调度** | 字段保留备用；Phase 1 仅手动刷新，Phase 2 视需求启用定时 goroutine |
+| 2026-11 | 安装器默认监听 `0.0.0.0:8787`，并在安装结束时打印初始化密钥 | 用户要求免 SSH 查文件；直连为明文 HTTP，安装输出与文档均提示改用反代 + HTTPS |

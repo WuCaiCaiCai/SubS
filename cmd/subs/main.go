@@ -84,6 +84,13 @@ func runServe(args []string) error {
 	if err := os.MkdirAll(*dataDir, 0o700); err != nil {
 		return fmt.Errorf("创建数据目录失败：%w", err)
 	}
+	// 安装器把密钥落在 0600 文件里而不写进 systemd unit，避免密钥出现在可被
+	// 其他本地用户读取的 unit 文件中；单元与文件哪个先就绪都能正常工作。
+	if *initToken == "" {
+		if b, readErr := os.ReadFile(filepath.Join(*dataDir, "init-token")); readErr == nil {
+			*initToken = strings.TrimSpace(string(b))
+		}
+	}
 	dbPath := filepath.Join(*dataDir, "subs.db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		f, e := os.OpenFile(dbPath, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
