@@ -102,15 +102,19 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
   }
 
   const toggleNode = async (node: NodeItem, enabled: boolean) => {
+    // 乐观更新：立即翻转开关避免整页刷新重拉列表的闪烁。
+    nodes.setData((list) => list?.map((n) => (n.id === node.id ? { ...n, enabled } : n)))
     try {
-      await api.put(`/api/nodes/${node.id}`, {
+      const saved = await api.put<NodeItem>(`/api/nodes/${node.id}`, {
         rawName: node.rawName,
         config: node.config,
         enabled,
         tags: node.tags,
       })
-      nodes.reload()
+      // 用服务器返回值覆盖（含 enabled 等字段），失败则按当前列表回滚。
+      nodes.setData((list) => list?.map((n) => (n.id === node.id ? saved : n)))
     } catch (err) {
+      nodes.setData((list) => list?.map((n) => (n.id === node.id ? { ...n, enabled: !enabled } : n)))
       toast('error', err instanceof ApiError ? err.message : '更新失败')
     }
   }

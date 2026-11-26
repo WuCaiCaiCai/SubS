@@ -26,10 +26,11 @@ export function SettingsPage() {
     setBusy(true)
     setError('')
     try {
-      await api.put('/api/system', { instanceName: name, externalUrl })
+      const saved = await api.put<{ instanceName: string; externalUrl: string }>('/api/system', { instanceName: name, externalUrl })
       toast('success', '设置已保存')
+      setName(saved.instanceName)
+      setExternalUrl(saved.externalUrl ?? '')
       setSavedAt(Date.now())
-      system.reload()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '保存失败')
     } finally {
@@ -45,12 +46,15 @@ export function SettingsPage() {
     }
     setBusy(true)
     setError('')
+    // 乐观更新：立即折叠开关；失败时回弹。误触开启不会被锁：
+    // 服务器只在一个已有 https 连接的后续同步请求完成锁定，页面刷新不再造成影响。
+    setHttpsOnly(next)
     try {
-      await api.put('/api/system', { httpsOnly: next })
-      setHttpsOnly(next)
+      const saved = await api.put<{ httpsOnly: boolean }>('/api/system', { httpsOnly: next })
+      setHttpsOnly(saved.httpsOnly)
       toast('success', next ? '已开启仅 HTTPS 访问' : '已关闭仅 HTTPS 访问')
-      system.reload()
     } catch (err) {
+      setHttpsOnly(!next)
       setError(err instanceof ApiError ? err.message : '保存失败')
     } finally {
       setBusy(false)

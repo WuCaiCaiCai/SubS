@@ -505,9 +505,13 @@ func (s *Server) updateSystem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(in.InstanceName)
-	if name == "" || len(name) > 64 {
+	// 实例名未传时保持不变（前端 toggle httpsOnly 只发开关），传了才校验长度。
+	if name != "" && len(name) > 64 {
 		fail(w, 400, "invalid_input", "实例名需为 1-64 个字符")
 		return
+	}
+	if name == "" {
+		_ = s.Store.DB().QueryRowContext(r.Context(), "SELECT name FROM instance WHERE id=1").Scan(&name)
 	}
 	ext := strings.TrimSpace(in.ExternalURL)
 	if ext != "" {
