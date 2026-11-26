@@ -40,7 +40,9 @@ func ParseLine(line string) (Result, error) {
 	if !ok {
 		return Result{}, fmt.Errorf("不是有效的分享链接")
 	}
-	if strings.EqualFold(scheme, "mieru") {
+	// mierus:// 是 mieru 分享链接的常见变体写法（scheme 多一个 s），
+	// 按相同规则解析。
+	if strings.EqualFold(scheme, "mieru") || strings.EqualFold(scheme, "mierus") {
 		cfg, err := parseMieruShareLink(line)
 		if err != nil {
 			return Result{}, err

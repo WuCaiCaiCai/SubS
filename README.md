@@ -64,7 +64,7 @@ cd web && npm run dev   # 5173，已配置 /api 与 /s/ 代理到 8787
 
 ### mieru 导入格式
 
-官方没有分享链接约定，本项目定义如下（同时兼容常见变体）：
+官方没有分享链接约定，本项目定义如下（同时兼容常见变体，包括 scheme 写成 `mierus://` 的版本）：
 
 ```
 mieru://username:password@host:port?transport=TCP&multiplexing=MULTIPLEXING_LOW&handshake-mode=HANDSHAKE_STANDARD&traffic-pattern=base64#节点名

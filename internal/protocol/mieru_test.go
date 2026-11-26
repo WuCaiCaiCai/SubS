@@ -60,6 +60,14 @@ func TestParseMieruShareLink(t *testing.T) {
 			host: "de.example.com", port: 9000, username: "alice", password: "p@ss:word",
 			extra: map[string]string{"transport": "TCP"},
 		},
+		{
+			// mierus:// 是分享链接常见变体，scheme 多一个 s；protocol= 与 port= query
+			// 与 authority 重复时按现有规则解析，profile= 等无关参数忽略。
+			name: "mierus scheme variant with ipv6",
+			line: "mierus://user:pw@[2a0a:d687:f007::9d]:30077?port=30077&protocol=TCP&profile=default#SG",
+			host: "2a0a:d687:f007::9d", port: 30077, username: "user", password: "pw",
+			extra: map[string]string{"transport": "TCP"},
+		},
 		{name: "missing password", line: "mieru://alice@de.example.com:9000", wantErr: true},
 		{name: "missing host", line: "mieru://alice:p@:9000", wantErr: true},
 		{name: "missing port", line: "mieru://alice:p@de.example.com", wantErr: true},
