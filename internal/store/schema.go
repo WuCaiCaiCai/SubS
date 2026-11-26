@@ -42,13 +42,8 @@ CREATE TABLE IF NOT EXISTS profile (
  naming_rule TEXT NOT NULL, secret_token TEXT NOT NULL UNIQUE,
  token_hash TEXT NOT NULL UNIQUE, last_fetch_at TEXT
 );
-CREATE TABLE IF NOT EXISTS profile_node (
- profile_id INTEGER NOT NULL REFERENCES profile(id) ON DELETE CASCADE,
- node_id INTEGER NOT NULL REFERENCES node(id) ON DELETE CASCADE,
- sort_order INTEGER NOT NULL, name_override TEXT,
- PRIMARY KEY(profile_id,node_id)
-);
--- profile_item 取代 profile_node：编排可以引用单个节点（kind='node'），
+-- profile_node 是 v1 的遗留表，其数据由 migrate() 迁入 profile_item 后删除，
+-- 不再出现在新 schema 中（见 internal/store/store.go）。
 -- 也可以引用整个来源（kind='source'），后者在渲染时展开成该来源的当前节点，
 -- 因此机场新增节点会自动进入已选整源的编排。
 CREATE TABLE IF NOT EXISTS profile_item (

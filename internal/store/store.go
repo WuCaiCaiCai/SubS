@@ -154,57 +154,88 @@ func ensureColumn(db *sql.DB, table, column, definition string) error {
 }
 
 func migrateProtocolConstraint(db *sql.DB) error {
-	rows, err := db.Query("SELECT sql FROM sqlite_master WHERE type='table' AND name='node'")
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		return rows.Err()
-	}
 	var ddl string
-	if err := rows.Scan(&ddl); err != nil {
+	// 先完全读完并关闭游标，再在同一连接上开启写事务；否则 SQLite 的读写
+	// 连接争抢文件锁会导致 deadlock（旧库升级时进程直接崩溃）。
+	if err := db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='node'").Scan(&ddl); err != nil {
 		return err
 	}
 	if strings.Contains(ddl, "'trojan'") {
 		return nil
 	}
-	_, err = db.Exec(`BEGIN;
-ALTER TABLE node RENAME TO node_legacy_protocol;
-CREATE TABLE node (
- id INTEGER PRIMARY KEY, source_type TEXT NOT NULL CHECK(source_type IN ('airport','server')),
- source_id INTEGER NOT NULL, protocol TEXT NOT NULL CHECK(protocol IN ('hy2','vless','tuic','anytls','mieru','ss','vmess','trojan')),
- raw_name TEXT NOT NULL, fingerprint TEXT NOT NULL, config TEXT NOT NULL,
- enabled INTEGER NOT NULL DEFAULT 1, missing INTEGER NOT NULL DEFAULT 0,is_new INTEGER NOT NULL DEFAULT 0,tags TEXT);
-INSERT INTO node SELECT * FROM node_legacy_protocol;
-DROP TABLE node_legacy_protocol;
-CREATE INDEX IF NOT EXISTS idx_node_source ON node(source_type,source_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_node_fp ON node(source_type,source_id,fingerprint);
-COMMIT;`)
-	return err
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmts := []string{
+		"ALTER TABLE node RENAME TO node_legacy_protocol",
+		"CREATE TABLE node (" +
+			"id INTEGER PRIMARY KEY, source_type TEXT NOT NULL CHECK(source_type IN ('airport','server'))," +
+			"source_id INTEGER NOT NULL, protocol TEXT NOT NULL CHECK(protocol IN ('hy2','vless','tuic','anytls','mieru','ss','vmess','trojan'))," +
+			"raw_name TEXT NOT NULL, fingerprint TEXT NOT NULL, config TEXT NOT NULL," +
+			"enabled INTEGER NOT NULL DEFAULT 1, missing INTEGER NOT NULL DEFAULT 0,is_new INTEGER NOT NULL DEFAULT 0,tags TEXT)",
+		"INSERT INTO node SELECT * FROM node_legacy_protocol",
+		"DROP TABLE node_legacy_protocol",
+		"CREATE INDEX IF NOT EXISTS idx_node_source ON node(source_type,source_id)",
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_node_fp ON node(source_type,source_id,fingerprint)",
+	}
+	for _, q := range stmts {
+		if _, err := tx.Exec(q); err != nil {
+			return fmt.Errorf("migrate protocol %q: %w", q, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("migrate protocol commit: %w", err)
+	}
+	return nil
+}
+
+func migrateProfileItem(db *sql.DB) error {
+	// profile_node 是 v1 的遗留表。它带有 REFERENCES node(id) 外键，必须
+	// 在 node 表重建（ALTER TABLE ... RENAME）之前完成迁移并删除：否则
+	// 外键会跟随 RENAME 指向 node_legacy_protocol，随后 DROP 造成孤儿引用，
+	// 下一次查询就报 no such table（旧库升级时曾因此崩溃）。
+	var exists int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table' AND name='profile_node'`).Scan(&exists); err != nil {
+		return err
+	}
+	if exists == 0 {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO profile_item(profile_id,kind,ref_id,source_type,sort_order,name_override)
+		SELECT profile_id,'node',node_id,'',sort_order,name_override FROM profile_node`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DROP TABLE profile_node`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func migrate(db *sql.DB) error {
 	if err := migrateListenColumns(db); err != nil {
-		return err
+		return fmt.Errorf("listen columns: %w", err)
+	}
+	// v1 → v2 遗留表迁移必须先行：它会 DROP 引用 node 的表，避免重建 node
+	// 时外键被 ALTER RENAME 拖到临时表名下（见 migrateProfileItem 注释）。
+	if err := migrateProfileItem(db); err != nil {
+		return fmt.Errorf("profile item: %w", err)
 	}
 	// Rebuild node because SQLite CHECK constraints cannot be widened in place.
 	if err := migrateProtocolConstraint(db); err != nil {
-		return err
+		return fmt.Errorf("protocol constraint: %w", err)
 	}
 	if err := ensureColumn(db, "instance", "caddy_domain", "TEXT NOT NULL DEFAULT ''"); err != nil {
-		return err
+		return fmt.Errorf("caddy domain: %w", err)
 	}
 	if err := ensureColumn(db, "instance", "caddy_port", "INTEGER NOT NULL DEFAULT 8787"); err != nil {
-		return err
+		return fmt.Errorf("caddy port: %w", err)
 	}
-	// v1 → v2: per-node selection becomes profile_item(kind='node').
-	// profile_node is emptied after copying so the step is a no-op next time.
-	_, err := db.Exec(`
-BEGIN;
-INSERT OR IGNORE INTO profile_item(profile_id,kind,ref_id,source_type,sort_order,name_override)
- SELECT profile_id,'node',node_id,'',sort_order,name_override FROM profile_node;
-DELETE FROM profile_node;
-COMMIT;`)
-	return err
+	return nil
 }

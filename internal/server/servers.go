@@ -139,8 +139,6 @@ func (s *Server) deleteServer(w http.ResponseWriter, r *http.Request) {
 		if force {
 			for _, q := range []string{
 				`DELETE FROM profile_item WHERE kind='source' AND source_type='server' AND ref_id=?`,
-				`DELETE FROM profile_node WHERE node_id IN
-				 (SELECT id FROM node WHERE source_type='server' AND source_id=?)`,
 				`DELETE FROM profile_item WHERE kind='node' AND ref_id IN
 				 (SELECT id FROM node WHERE source_type='server' AND source_id=?)`,
 			} {

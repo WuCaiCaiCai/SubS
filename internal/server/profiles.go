@@ -270,13 +270,8 @@ func (s *Server) deleteProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := s.Store.Write(r.Context(), func(tx *sql.Tx) error {
-		for _, q := range []string{
-			"DELETE FROM profile_item WHERE profile_id=?",
-			"DELETE FROM profile_node WHERE profile_id=?",
-		} {
-			if _, err := tx.ExecContext(r.Context(), q, id); err != nil {
-				return err
-			}
+		if _, err := tx.ExecContext(r.Context(), "DELETE FROM profile_item WHERE profile_id=?", id); err != nil {
+			return err
 		}
 		_, err := tx.ExecContext(r.Context(), "DELETE FROM profile WHERE id=?", id)
 		return err
