@@ -1,0 +1,443 @@
+allow-lan: false
+bind-address: '*'
+dns:
+    enable: true
+    enhanced-mode: fake-ip
+    fake-ip-filter:
+        - '*.lan'
+        - '*.local'
+        - '*.internal'
+        - localhost.ptlogin2.qq.com
+        - +.stun.*
+        - +.bilibili.com
+        - time.*.com
+        - time.*.gov
+        - ntp.*.com
+        - +.push.apple.com
+        - +.msftconnecttest.com
+        - +.msftncsi.com
+    fake-ip-filter-v6: 2800:1::/48
+    fake-ip-range: 198.18.0.1/16
+    ipv6: true
+    nameserver:
+        - https://doh.pub/dns-query
+        - https://dns.alidns.com/dns-query
+        - 119.29.29.29
+        - 223.5.5.5
+    proxy-server-nameserver:
+        - 223.5.5.5
+        - 119.29.29.29
+    respect-rules: true
+external-controller: 127.0.0.1:9090
+find-process-mode: "off"
+geodata-loader: standard
+geodata-mode: true
+geosite-matcher: strand
+geox-url:
+    geoip: https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat
+    geosite: https://testingcf.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat
+    mmdb: https://testingcf.jsdelivr.net/gh/Hackl0us/GeoIP2-CN@release/Country.mmdb
+global-client-fingerprint: chrome
+keep-alive-interval: 30
+log-level: warning
+mode: Rule
+port: 7890
+profile:
+    store-selected: true
+proxies:
+    - name: "吹雪云-\U0001F1EF\U0001F1F5日本•电信02"
+      type: vless
+      server: cdn-a.example.test
+      port: 443
+      client-fingerprint: safari
+      udp: true
+      tls: true
+      servername: jp2.example.test
+      network: ws
+      ws-opts:
+        headers:
+            Host: jp2.example.test
+        path: /chuixue/jp2
+      uuid: 11111111-2222-4333-8444-555555555555
+    - name: US_TUIC_V4
+      type: tuic
+      server: 192.0.2.10
+      port: 30060
+      password: test-pass-01
+      udp: true
+      skip-cert-verify: true
+      tls: true
+      alpn:
+        - h3
+      sni: www.bing.com
+      uuid: aaaaaaa1-bbbb-4ccc-8ddd-eeeeeeeeeee1
+      congestion-controller: bbr
+      version: 5
+    - name: TR_TUIC_V4
+      type: tuic
+      server: 192.0.2.10
+      port: 60010
+      password: test-pass-02
+      udp: true
+      skip-cert-verify: true
+      tls: true
+      alpn:
+        - h3
+      sni: www.bing.com
+      uuid: aaaaaaa1-bbbb-4ccc-8ddd-eeeeeeeeeee1
+      congestion-controller: bbr
+      version: 5
+    - name: SG_HY2_V4
+      type: hysteria2
+      server: 192.0.2.20
+      port: 30050
+      password: test-pass-03
+      udp: true
+      skip-cert-verify: true
+      auth: test-pass-09
+      alpn:
+        - h3
+      sni: www.cloudflare.com
+    - name: SG_TUIC_V4
+      type: tuic
+      server: 192.0.2.20
+      port: 30060
+      password: test-pass-04
+      udp: true
+      skip-cert-verify: true
+      tls: true
+      alpn:
+        - h3
+      sni: www.cloudflare.com
+      uuid: aaaaaaa2-bbbb-4ccc-8ddd-eeeeeeeeeee2
+      congestion-controller: bbr
+      version: 5
+    - name: SG_AnyTLS_V4
+      type: anytls
+      server: 192.0.2.20
+      port: 30055
+      password: test-pass-05
+      udp: true
+      skip-cert-verify: true
+      sni: www.cloudflare.com
+    - name: SG_HY2_V6
+      type: hysteria2
+      server: 2001:db8::9d
+      port: 30050
+      password: test-pass-06
+      udp: true
+      skip-cert-verify: true
+      auth: test-pass-10
+      alpn:
+        - h3
+      sni: www.cloudflare.com
+    - name: SG_TUIC_V6
+      type: tuic
+      server: 2001:db8::9d
+      port: 30060
+      password: test-pass-07
+      udp: true
+      skip-cert-verify: true
+      tls: true
+      alpn:
+        - h3
+      sni: www.cloudflare.com
+      uuid: aaaaaaa2-bbbb-4ccc-8ddd-eeeeeeeeeee2
+      congestion-controller: bbr
+      version: 5
+    - name: SG_AnyTLS_V6
+      type: anytls
+      server: 2001:db8::9d
+      port: 30055
+      password: test-pass-08
+      udp: true
+      skip-cert-verify: true
+      sni: www.cloudflare.com
+    - name: "吹雪云-\U0001F1ED\U0001F1F0香港•电信02"
+      type: vless
+      server: cdn-a.example.test
+      port: 443
+      client-fingerprint: ios
+      udp: true
+      tls: true
+      servername: hk2.example.test
+      network: ws
+      ws-opts:
+        headers:
+            Host: hk2.example.test
+        path: /chuixue/hk2
+      uuid: 11111111-2222-4333-8444-555555555555
+    - name: "吹雪云-\U0001F1EC\U0001F1E7英国•电信01"
+      type: vless
+      server: cdn-a.example.test
+      port: 443
+      client-fingerprint: ios
+      udp: true
+      tls: true
+      servername: gb1.example.test
+      network: ws
+      ws-opts:
+        headers:
+            Host: gb1.example.test
+        path: /chuixue/gb1
+      uuid: 11111111-2222-4333-8444-555555555555
+    - name: "吹雪云-\U0001F1E9\U0001F1EA德国•电信01"
+      type: vless
+      server: cdn-a.example.test
+      port: 443
+      client-fingerprint: safari
+      udp: true
+      tls: true
+      servername: de1.example.test
+      network: ws
+      ws-opts:
+        headers:
+            Host: de1.example.test
+        path: /chuixue/de1
+      uuid: 11111111-2222-4333-8444-555555555555
+    - name: "吹雪云-\U0001F1E9\U0001F1EA德国•移联01"
+      type: vless
+      server: cdn-b.example.test
+      port: 443
+      client-fingerprint: ios
+      udp: true
+      tls: true
+      servername: cdn-dynmedia-1.microsoft.com
+      flow: xtls-rprx-vision
+      reality-opts:
+        public-key: testpublickeyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+        short-id: a1b2c3d4
+      uuid: 11111111-2222-4333-8444-555555555555
+proxy-groups:
+    - include-all: true
+      name: All
+      proxies:
+        - DIRECT
+      type: select
+    - include-all: true
+      name: Stable
+      proxies:
+        - All
+        - DIRECT
+      type: select
+    - include-all: true
+      name: HighSpeed
+      proxies:
+        - All
+        - DIRECT
+      type: select
+    - include-all: true
+      name: BulkDownload
+      proxies:
+        - All
+        - DIRECT
+      type: select
+    - name: Microsoft
+      proxies:
+        - Stable
+        - DIRECT
+      type: select
+    - name: Apple
+      proxies:
+        - Stable
+        - DIRECT
+      type: select
+    - name: XBOX
+      proxies:
+        - DIRECT
+        - BulkDownload
+      type: select
+rules:
+    - DOMAIN,xyemby.kingba.com,DIRECT
+    - DOMAIN,emby.wucai.space,DIRECT
+    - DOMAIN-SUFFIX,wucai.space,DIRECT
+    - DOMAIN-SUFFIX,n1.fnat.cc,DIRECT
+    - DOMAIN-SUFFIX,vban.xyz,HighSpeed
+    - DOMAIN-SUFFIX,proraincut.v6.army,All
+    - GEOSITE,tmdb,HighSpeed
+    - DOMAIN-SUFFIX,themoviedb.org,HighSpeed
+    - DOMAIN-SUFFIX,tmdb.org,HighSpeed
+    - DOMAIN-SUFFIX,tmdb.org.edgesuite.net,HighSpeed
+    - DOMAIN-KEYWORD,themoviedb,HighSpeed
+    - DOMAIN-KEYWORD,tmdb,HighSpeed
+    - DOMAIN-SUFFIX,fanart.tv,HighSpeed
+    - DOMAIN-SUFFIX,thetvdb.com,HighSpeed
+    - DOMAIN-SUFFIX,omdbapi.com,HighSpeed
+    - DOMAIN-SUFFIX,trakt.tv,HighSpeed
+    - GEOSITE,telegram,HighSpeed
+    - GEOIP,telegram,HighSpeed
+    - DOMAIN-SUFFIX,t.me,HighSpeed
+    - DOMAIN-SUFFIX,tdesktop.com,HighSpeed
+    - DOMAIN-SUFFIX,telegra.ph,HighSpeed
+    - DOMAIN-SUFFIX,telegram.me,HighSpeed
+    - DOMAIN-SUFFIX,telegram.org,HighSpeed
+    - DOMAIN-SUFFIX,telesco.pe,HighSpeed
+    - DOMAIN-KEYWORD,telegram,HighSpeed
+    - GEOIP,private,DIRECT,no-resolve
+    - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+    - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+    - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+    - IP-CIDR6,fc00::/7,DIRECT,no-resolve
+    - GEOSITE,category-ads,REJECT
+    - DOMAIN-KEYWORD,doubleclick,REJECT
+    - DOMAIN-KEYWORD,adservice,REJECT
+    - GEOSITE,youtube,HighSpeed
+    - DOMAIN-SUFFIX,googlevideo.com,HighSpeed
+    - DOMAIN-SUFFIX,youtube.com,HighSpeed
+    - DOMAIN-SUFFIX,ytimg.com,HighSpeed
+    - DOMAIN-SUFFIX,youtu.be,HighSpeed
+    - GEOSITE,openai,Stable
+    - GEOSITE,anthropic,Stable
+    - GEOSITE,google,Stable
+    - DOMAIN-SUFFIX,play.google.com,Stable
+    - DOMAIN-SUFFIX,android.com,Stable
+    - DOMAIN-SUFFIX,androidify.com,Stable
+    - DOMAIN-SUFFIX,appspot.com,Stable
+    - DOMAIN-SUFFIX,g.co,Stable
+    - DOMAIN-SUFFIX,ggpht.com,Stable
+    - DOMAIN-SUFFIX,google.com,Stable
+    - DOMAIN-SUFFIX,googleapis.com,Stable
+    - DOMAIN-SUFFIX,googleapis.cn,Stable
+    - DOMAIN-SUFFIX,gstatic.com,Stable
+    - DOMAIN-SUFFIX,gstatic.cn,Stable
+    - DOMAIN-SUFFIX,googleusercontent.com,Stable
+    - DOMAIN-SUFFIX,googlezip.net,Stable
+    - DOMAIN-SUFFIX,gvt0.com,Stable
+    - DOMAIN-SUFFIX,gvt1.com,Stable
+    - DOMAIN-SUFFIX,gvt2.com,Stable
+    - DOMAIN-SUFFIX,gvt3.com,Stable
+    - DOMAIN-SUFFIX,1e100.net,Stable
+    - DOMAIN-SUFFIX,chatgpt.com,Stable
+    - DOMAIN-SUFFIX,openai.com,Stable
+    - DOMAIN-SUFFIX,oaistatic.com,Stable
+    - DOMAIN-SUFFIX,oaiusercontent.com,Stable
+    - DOMAIN-SUFFIX,claude.ai,Stable
+    - DOMAIN-SUFFIX,anthropic.com,Stable
+    - DOMAIN-SUFFIX,grok.com,Stable
+    - DOMAIN-SUFFIX,x.ai,Stable
+    - DOMAIN-SUFFIX,perplexity.ai,Stable
+    - GEOSITE,github,HighSpeed
+    - DOMAIN-SUFFIX,github.com,HighSpeed
+    - DOMAIN-SUFFIX,githubusercontent.com,HighSpeed
+    - GEOSITE,twitter,HighSpeed
+    - GEOSITE,discord,HighSpeed
+    - GEOSITE,netflix,HighSpeed
+    - DOMAIN-SUFFIX,nflxvideo.net,HighSpeed
+    - DOMAIN-SUFFIX,nflxext.com,HighSpeed
+    - DOMAIN-SUFFIX,nflximg.net,HighSpeed
+    - DOMAIN-SUFFIX,nflximg.ar,HighSpeed
+    - GEOSITE,disney,HighSpeed
+    - DOMAIN-SUFFIX,disneyplus.com,HighSpeed
+    - DOMAIN-SUFFIX,bamgrid.com,HighSpeed
+    - GEOSITE,spotify,HighSpeed
+    - DOMAIN-SUFFIX,scdn.co,HighSpeed
+    - DOMAIN-SUFFIX,spotifycdn.com,HighSpeed
+    - GEOSITE,bahamut,HighSpeed
+    - DOMAIN-SUFFIX,bahamut.akamaized.net,HighSpeed
+    - GEOSITE,pikpak,BulkDownload
+    - DOMAIN-KEYWORD,torrent,BulkDownload
+    - DOMAIN-KEYWORD,announce,BulkDownload
+    - GEOSITE,category-games@cn,DIRECT
+    - GEOSITE,bilibili@cn,DIRECT
+    - GEOSITE,bilibili,DIRECT
+    - GEOSITE,steam@cn,DIRECT
+    - DOMAIN-SUFFIX,steamcontent.com,DIRECT
+    - DOMAIN-SUFFIX,steamserver.net,DIRECT
+    - DOMAIN-SUFFIX,steamcdn-a.akamaihd.net,DIRECT
+    - DOMAIN-SUFFIX,akamaihd.net,DIRECT
+    - DOMAIN-SUFFIX,akamaized.net,DIRECT
+    - DOMAIN-SUFFIX,cloudfront.net,DIRECT
+    - DOMAIN,fastly.cdn.steampipe.steamcontent.com,DIRECT
+    - DOMAIN-KEYWORD,steamcontent,DIRECT
+    - DOMAIN-KEYWORD,steamvideo,DIRECT
+    - DOMAIN-SUFFIX,store.steampowered.com,BulkDownload
+    - DOMAIN-SUFFIX,steamcommunity.com,BulkDownload
+    - DOMAIN-SUFFIX,steampowered.com,BulkDownload
+    - DOMAIN-SUFFIX,steamapi.com,BulkDownload
+    - DOMAIN-SUFFIX,steam-chat.com,BulkDownload
+    - DOMAIN-SUFFIX,community.cloudflare.steamstatic.com,BulkDownload
+    - IP-CIDR,45.121.184.0/24,DIRECT,no-resolve
+    - IP-CIDR,103.10.124.0/23,DIRECT,no-resolve
+    - IP-CIDR,103.28.54.0/24,DIRECT,no-resolve
+    - IP-CIDR,146.66.152.0/24,DIRECT,no-resolve
+    - IP-CIDR,146.66.155.0/24,DIRECT,no-resolve
+    - IP-CIDR,153.254.86.0/24,DIRECT,no-resolve
+    - IP-CIDR,155.133.224.0/22,DIRECT,no-resolve
+    - IP-CIDR,155.133.230.0/24,DIRECT,no-resolve
+    - IP-CIDR,155.133.232.0/23,DIRECT,no-resolve
+    - IP-CIDR,155.133.234.0/24,DIRECT,no-resolve
+    - IP-CIDR,155.133.236.0/22,DIRECT,no-resolve
+    - IP-CIDR,155.133.240.0/23,DIRECT,no-resolve
+    - IP-CIDR,155.133.244.0/23,DIRECT,no-resolve
+    - IP-CIDR,155.133.246.0/24,DIRECT,no-resolve
+    - IP-CIDR,155.133.248.0/21,DIRECT,no-resolve
+    - IP-CIDR,162.254.192.0/21,DIRECT,no-resolve
+    - IP-CIDR,185.25.182.0/23,DIRECT,no-resolve
+    - IP-CIDR,190.217.32.0/22,DIRECT,no-resolve
+    - IP-CIDR,192.69.96.0/22,DIRECT,no-resolve
+    - IP-CIDR,205.196.6.0/24,DIRECT,no-resolve
+    - IP-CIDR,208.64.200.0/22,DIRECT,no-resolve
+    - IP-CIDR,208.78.164.0/22,DIRECT,no-resolve
+    - IP-CIDR,205.185.194.0/24,DIRECT,no-resolve
+    - DOMAIN-SUFFIX,assets1.xboxlive.cn,XBOX
+    - DOMAIN-SUFFIX,assets2.xboxlive.cn,XBOX
+    - DOMAIN-SUFFIX,assets1.xboxlive.com,XBOX
+    - DOMAIN-SUFFIX,assets2.xboxlive.com,XBOX
+    - DOMAIN-SUFFIX,dlassets.xboxlive.com,XBOX
+    - DOMAIN-SUFFIX,dlassets2.xboxlive.com,XBOX
+    - DOMAIN-SUFFIX,d1.xboxlive.com,XBOX
+    - DOMAIN-SUFFIX,d2.xboxlive.com,XBOX
+    - DOMAIN-SUFFIX,xvcf1.xboxlive.com,XBOX
+    - DOMAIN-SUFFIX,xvcf2.xboxlive.com,XBOX
+    - DOMAIN-SUFFIX,dl.delivery.mp.microsoft.com,XBOX
+    - DOMAIN-SUFFIX,tlu.dl.delivery.mp.microsoft.com,XBOX
+    - DOMAIN-SUFFIX,rewards.bing.com,Microsoft
+    - DOMAIN-SUFFIX,bing.com,Microsoft
+    - DOMAIN-KEYWORD,rewards,Microsoft
+    - GEOSITE,xbox@cn,Microsoft
+    - GEOSITE,xbox,Microsoft
+    - DOMAIN-SUFFIX,xbox.com,Microsoft
+    - DOMAIN-SUFFIX,xboxlive.com,Microsoft
+    - DOMAIN-SUFFIX,gamepass.com,Microsoft
+    - DOMAIN-SUFFIX,xboxab.com,Microsoft
+    - DOMAIN-SUFFIX,xboxservices.com,Microsoft
+    - DOMAIN-KEYWORD,xboxlive,Microsoft
+    - GEOSITE,microsoft,Microsoft
+    - GEOSITE,onedrive,DIRECT
+    - DOMAIN-SUFFIX,gsa.apple.com,Apple
+    - DOMAIN-SUFFIX,gsas.apple.com,Apple
+    - DOMAIN-SUFFIX,idmsa.apple.com,Apple
+    - DOMAIN-SUFFIX,developer.apple.com,Apple
+    - DOMAIN-SUFFIX,developerservices2.apple.com,Apple
+    - DOMAIN-SUFFIX,appstoreconnect.apple.com,Apple
+    - DOMAIN-SUFFIX,albert.apple.com,Apple
+    - DOMAIN-SUFFIX,ocsp.apple.com,Apple
+    - DOMAIN-SUFFIX,ocsp2.apple.com,Apple
+    - DOMAIN-SUFFIX,valid.apple.com,Apple
+    - DOMAIN-SUFFIX,appleid.apple.com,Apple
+    - DOMAIN-SUFFIX,appleid.cdn-apple.com,Apple
+    - GEOSITE,apple@cn,DIRECT
+    - GEOSITE,apple,DIRECT
+    - GEOSITE,cn,DIRECT
+    - GEOIP,CN,DIRECT
+    - MATCH,All
+sniffer:
+    enable: true
+    forced-dns-mapping: true
+    parse-pure-ip: true
+    sniff:
+        http:
+            ports:
+                - 80
+                - 8080-8090
+        quic:
+            ports:
+                - 443
+                - 8443
+        tls:
+            ports:
+                - 443
+                - 8443
+socks-port: 7891
+tcp-concurrent: true
+unified-delay: true

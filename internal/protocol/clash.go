@@ -57,9 +57,12 @@ func clashProxyToConfig(p map[string]any) (Config, error) {
 		return Config{}, fmt.Errorf("缺少 server/port")
 	}
 	tls := map[string]any{
-		"sni":         str(p["sni"]),
+		"sni":         firstNonEmpty(str(p["servername"]), str(p["sni"])),
 		"insecure":    boolOf(p["skip-cert-verify"]),
 		"fingerprint": str(p["client-fingerprint"]),
+		// mihomo 的 udp 开 UDP relay；订阅生态几乎都显式写 true，
+		// 字段缺失时默认开启，与参考配置行为一致。
+		"udp": udpOf(p),
 	}
 	switch typ {
 	case "ss", "shadowsocks":
@@ -103,6 +106,8 @@ func clashProxyToConfig(p map[string]any) (Config, error) {
 		if str(p["password"]) == "" {
 			return Config{}, fmt.Errorf("缺少 password")
 		}
+		// hysteria2 走 QUIC，alpn 默认 h3；参考配置会显式写 alpn: [h3]。
+		tls["alpn"] = firstNonEmpty(alpnOf(p), "h3")
 		cfg := Config{Protocol: "hy2", Host: host, Port: port,
 			Auth:      map[string]any{"password": str(p["password"])},
 			Transport: tls}
@@ -157,10 +162,15 @@ func clashProxyToConfig(p map[string]any) (Config, error) {
 		if congestion == "" {
 			congestion = "bbr"
 		}
+		// TUIC v5 是 mihomo 唯一广泛支持的版本；旧 YAML 未写时默认 5。
+		version := 5
+		if v := intOf(p["version"]); v == 4 || v == 5 {
+			version = v
+		}
 		return Config{Protocol: "tuic", Host: host, Port: port,
 			Auth:      map[string]any{"uuid": uuid, "password": password},
-			Transport: map[string]any{"sni": str(p["sni"]), "alpn": alpn, "insecure": boolOf(p["skip-cert-verify"])},
-			Extra:     map[string]any{"congestionControl": congestion}}, nil
+			Transport: map[string]any{"sni": firstNonEmpty(str(p["servername"]), str(p["sni"])), "alpn": alpn, "insecure": boolOf(p["skip-cert-verify"]), "udp": udpOf(p)},
+			Extra:     map[string]any{"congestionControl": congestion, "tuicVersion": version}}, nil
 	case "anytls":
 		if str(p["password"]) == "" {
 			return Config{}, fmt.Errorf("AnyTLS 缺少密码")
@@ -239,4 +249,34 @@ func boolOf(v any) bool {
 		return t == 1
 	}
 	return false
+}
+
+// udpOf 读 mihomo 的 udp 字段；QUIC 协议（hy2/tuic）天然 UDP，
+// 字段缺失时与多数订阅一致地开启。
+func udpOf(p map[string]any) bool {
+	if v, ok := p["udp"]; ok {
+		return boolOf(v)
+	}
+	switch strings.ToLower(str(p["type"])) {
+	case "hysteria2", "hy2", "tuic":
+		return true
+	}
+	return false
+}
+
+// alpnOf 把 mihomo 的 alpn 列表压回单个字符串（多值时取第一个）。
+func alpnOf(p map[string]any) string {
+	switch t := p["alpn"].(type) {
+	case string:
+		return t
+	case []any:
+		if len(t) > 0 {
+			return str(t[0])
+		}
+	case []string:
+		if len(t) > 0 {
+			return t[0]
+		}
+	}
+	return ""
 }

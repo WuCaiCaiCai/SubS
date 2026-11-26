@@ -84,11 +84,13 @@ function withParams(url: string, params: Record<string, string>): string {
 export function SubscriptionOutput({
   url,
   name,
+  slug,
   onRotate,
   rotating,
 }: {
   url: string | null
   name: string
+  slug?: string
   onRotate: () => void
   rotating: boolean
 }) {
@@ -163,7 +165,7 @@ export function SubscriptionOutput({
       const href = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = href
-      a.download = `${(name || 'subs').replace(/[^\w\-.]/g, '') || 'subs'}-subs.zip`
+      a.download = `${slug || (name || 'subs').replace(/[^\w\-.]/g, '') || 'subs'}-subs.zip`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -176,18 +178,25 @@ export function SubscriptionOutput({
     }
   }
 
+  // 下载文件名优先用订阅名（slug），没有则退回 subs.yaml 等通用名；
+  // 与服务端 contentDisposition 的行为保持一致。
+  const fileFor = (t: { id: string; file: string }) => {
+    if (!slug) return t.file
+    const ext = t.file.slice(t.file.indexOf('.'))
+    return `${slug}${ext}`
+  }
   const importLinks = [
     {
       label: 'Clash / Mihomo',
       hint: 'Clash Verge Rev、FlClash、ClashX Meta',
-      href: `clash://install-config?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`,
+      href: `clash://install-config?url=${encodeURIComponent(url)}&name=${encodeURIComponent(slug || name)}`,
       icon: Server,
       action: '打开客户端',
     },
     {
       label: 'sing-box',
       hint: 'SFA / SFI',
-      href: `sing-box://import-remote-profile?url=${encodeURIComponent(url)}#${encodeURIComponent(name)}`,
+      href: `sing-box://import-remote-profile?url=${encodeURIComponent(url)}#${encodeURIComponent(slug || name)}`,
       icon: Plane,
       action: '打开客户端',
     },
@@ -263,7 +272,7 @@ export function SubscriptionOutput({
               <button
                 key={t.id}
                 type="button"
-                onClick={() => download(t.id, t.file)}
+                onClick={() => download(t.id, fileFor(t))}
                 disabled={busy !== ''}
                 title={t.hint}
                 className="flex flex-col items-start gap-0.5 rounded-lg border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-accent/50 hover:bg-raised disabled:opacity-50"
@@ -271,7 +280,7 @@ export function SubscriptionOutput({
                 <span className="flex items-center gap-1.5 text-body font-medium text-fg-soft">
                   {busy === t.id ? <Spinner /> : <Download size={13} />} {t.label}
                 </span>
-                <span className="mono text-meta text-fg-subtle">{t.file}</span>
+                <span className="mono text-meta text-fg-subtle">{fileFor(t)}</span>
               </button>
             ))}
           </div>

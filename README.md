@@ -27,7 +27,7 @@ curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.
 
 也可用环境变量预置：`SUBS_BIND`、`SUBS_PORT`，或一次性指定 `SUBS_LISTEN=host:port`。安装结束会直接打印初始化密钥与可复制的访问地址。
 
-> 直连是明文 HTTP。公网使用请务必走下面的 Caddy 反向代理启用 HTTPS，不要把管理面板继续暴露在明文 HTTP 上。
+> 直连是明文 HTTP。公网使用请务必自行配置反向代理（Caddy / Nginx 等）启用 HTTPS，不要把管理面板继续暴露在明文 HTTP 上；随后可在「设置 → 仅支持 HTTPS 访问」开启强校验。
 
 ### 本地跑起来
 
@@ -77,59 +77,23 @@ mieru://username:password@host:port?transport=TCP&multiplexing=MULTIPLEXING_LOW&
 - `handshake-mode`：`HANDSHAKE_STANDARD`（默认）或 `HANDSHAKE_NO_WAIT`（0-RTT）
 - 用户名与密码是凭据，节点列表里只显示主机与端口
 
-## 配置 Caddy 反向代理（HTTPS）
+## 启用 HTTPS（反向代理由你自行部署）
 
-SubS 本身不监听 HTTPS，需要由 Caddy 做 TLS 终止并把流量反代回本机。分三步：
+SubS 本身不监听 HTTPS，由你自己的反向代理（Caddy、Nginx、宝塔、Traefik 等）做 TLS 终止。推荐流程：
 
-### 1. 让 SubS 只监听回环
+1. **让 SubS 只监听回环**：安装时监听地址填 `127.0.0.1`，或编辑 systemd unit 里的 `--listen` 后 `systemctl restart subs`。
+2. **在反代上配置站点**：以 Caddy 为例，一行就够（证书自动签发续期）：
 
-安装时监听地址填 `127.0.0.1`，或编辑 systemd unit 里的 `--listen` 后 `systemctl restart subs`。这样只有本机进程能直连，公网流量只经过 Caddy。
+   ```caddyfile
+   subs.example.com {
+       reverse_proxy 127.0.0.1:8787
+   }
+   ```
 
-### 2. 在 WebUI 保存域名与上游端口
+   使用 Nginx 时请同时传递 `proxy_set_header X-Forwarded-Proto https;`。
+3. **开启「仅支持 HTTPS 访问」**：在 WebUI「设置」页打开开关后，所有明文 HTTP 请求（含订阅链接）一律返回 426，只接受直连 TLS 或反代声明的 `X-Forwarded-Proto: https`；`/healthz` 探活不受影响。开关只能在 HTTPS 连接下开启，避免把自己锁在门外。
 
-进入 **设置 →「Caddy HTTPS 反向代理」**，填写：
-
-- **公网域名**：例如 `subs.example.com`（DNS 需指向本机）
-- **本机上游端口**：SubS 实际监听的端口（如 `8787`），必须与第 1 步一致
-
-保存后会自动生成本机的 Caddyfile，内容形如：
-
-```caddyfile
-subs.example.com {
-	encode zstd gzip
-	reverse_proxy 127.0.0.1:8787
-}
-```
-
-页面上可预览、下载这份 Caddyfile。它只包含域名与 `127.0.0.1:<端口>` 上游，不含任何其他指令。
-
-### 3. SSH 运行配置脚本接入 Caddy
-
-```bash
-sudo bash configure-caddy.sh
-```
-
-脚本会：
-
-- 读取 `/var/lib/subs/Caddyfile`，校验内容确属 SubS 生成的受限格式（拒绝任意导入/路由等指令）
-- 把它写成本机独立站点片段 `/etc/caddy/subs.Caddyfile`，并在主配置 `/etc/caddy/Caddyfile` 里追加一条 `import`，**不动其他站点**
-- 先 `caddy validate` 校验暂存配置，再替换并 `systemctl reload caddy`；任一步失败都会回滚并保留原配置备份
-- 通过后打印主配置与站点片段路径，以及原配置的 `.subs-backup-<时间戳>` 备份位置
-
-自定义路径/服务可用参数或环境变量覆盖：
-
-```bash
-sudo ./configure-caddy.sh --data-dir /var/lib/subs --caddyfile /etc/caddy/Caddyfile
-# 环境变量：CADDY_MAIN_FILE / CADDY_SUBS_FILE / CADDY_SERVICE / CADDY_BIN
-```
-
-完成后确认 DNS 已指向本机、80/443 端口可达（Caddy 自动签发证书需要），即可从 `https://你的域名` 登录。
-
-### 迁移时的说明
-
-- WebUI 的 Caddy 配置会随 `.sbox` 加密备份一起迁移（域名 + 上游端口 + 生成的 Caddyfile），但**不包含 Caddy 证书或私钥**
-- 迁移到新机后：先跑 SubS 安装脚本 → WebUI 恢复 `.sbox` → SSH 运行 `configure-caddy.sh` → 在新机重新签发证书
-- 脚本只接入 SubS 自己的站点片段，不覆盖目标机现有的其他 Caddy 站点；DNS、防火墙、其他站点仍由你自行处理
+订阅链接与备份恢复均与反代无关：换代理、换证书不需要改 SubS 任何配置。
 
 ## 常用命令
 
@@ -171,7 +135,6 @@ internal/profile/  命名规则
 internal/backup/   .sbox 归档
 internal/secrets/  加密与口令
 web/               React + Tailwind 前端
-configure-caddy.sh Caddy 反向代理接入脚本
 ```
 
 设计文档见 `docs/` 目录：`docs/设计说明.md`、`docs/数据模型与API规范.md`、`docs/协议解析与配置生成规范.md` 等。

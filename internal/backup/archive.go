@@ -91,7 +91,8 @@ func Read(data []byte, password string) (map[string][]byte, error) {
 		if hdr.Size < 0 || hdr.Size > MaxSize {
 			return nil, errors.New("备份文件过大")
 		}
-		if hdr.Name != "metadata.json" && hdr.Name != "db.sqlite" && hdr.Name != "caddy/Caddyfile" {
+		if hdr.Name != "metadata.json" && hdr.Name != "db.sqlite" {
+			// 旧版备份可能包含 caddy/Caddyfile：忽略并跳过，不作为错误。
 			if _, err := io.CopyN(io.Discard, tr, hdr.Size); err != nil {
 				return nil, errors.New("备份格式错误")
 			}

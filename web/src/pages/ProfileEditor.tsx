@@ -732,6 +732,7 @@ function PublishStep({
 }) {
   const [templateId, setTemplateId] = useState(profile.templateId)
   const [enabled, setEnabled] = useState(profile.enabled)
+  const [slug, setSlug] = useState(profile.slug)
   const [target, setTarget] = useState<'mihomo' | 'sing-box' | 'loon'>('mihomo')
   const [preview, setPreview] = useState<{ content: string; skipped: string[] } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -740,14 +741,21 @@ function PublishStep({
   useEffect(() => {
     setTemplateId(profile.templateId)
     setEnabled(profile.enabled)
+    setSlug(profile.slug)
   }, [profile])
 
   const save = async () => {
     setBusy(true)
     try {
+      const cleaned = slug.trim().toLowerCase()
+      if (cleaned && !/^[a-z0-9](-?[a-z0-9])*$/.test(cleaned)) {
+        toast('error', '订阅名仅支持小写字母、数字与连字符')
+        return
+      }
       await api.put(`/api/profiles/${profile.id}`, {
         name: profile.name,
         note: profile.note,
+        slug: cleaned,
         templateId,
         enabled,
         namingRule: profile.namingRule,
@@ -815,6 +823,26 @@ function PublishStep({
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-[0.75rem] font-medium text-fg-soft">订阅名（URL 路径段）</span>
+            <div className="flex items-center gap-1.5">
+              <span className="mono shrink-0 text-[0.7188rem] text-fg-subtle">/s/</span>
+              <input
+                className="input mono"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                placeholder="my-family"
+                maxLength={32}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <span className="mono shrink-0 text-[0.7188rem] text-fg-subtle">/&lt;token&gt;</span>
+            </div>
+            <span className="block text-[0.6875rem] text-fg-muted">
+              可选。小写字母、数字、连字符；留空则使用 <code className="mono">/s/&lt;token&gt;</code> 旧式链接。保存后订阅链接变为该形式。
+            </span>
           </label>
 
           <label className="flex items-center gap-2 text-[0.7812rem] text-fg-soft">
@@ -891,6 +919,7 @@ function PublishStep({
         <SubscriptionOutput
           url={profile.url}
           name={profile.name}
+          slug={profile.slug}
           onRotate={rotate}
           rotating={rotating}
         />

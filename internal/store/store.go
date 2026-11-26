@@ -231,11 +231,17 @@ func migrate(db *sql.DB) error {
 	if err := migrateProtocolConstraint(db); err != nil {
 		return fmt.Errorf("protocol constraint: %w", err)
 	}
-	if err := ensureColumn(db, "instance", "caddy_domain", "TEXT NOT NULL DEFAULT ''"); err != nil {
-		return fmt.Errorf("caddy domain: %w", err)
+	// https_only 替代旧版 Caddy 配置列（caddy_domain/caddy_port 已不再使用，
+	// 旧库中遗留的列保留不读，避免无法回退）。
+	if err := ensureColumn(db, "instance", "https_only", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return fmt.Errorf("https only: %w", err)
 	}
-	if err := ensureColumn(db, "instance", "caddy_port", "INTEGER NOT NULL DEFAULT 8787"); err != nil {
-		return fmt.Errorf("caddy port: %w", err)
+	// slug：订阅名的 URL 路径段，允许为空（空 = 兼容旧链接 /s/<token>）。
+	if err := ensureColumn(db, "profile", "slug", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return fmt.Errorf("profile slug: %w", err)
+	}
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_slug ON profile(slug) WHERE slug<>''`); err != nil {
+		return fmt.Errorf("profile slug index: %w", err)
 	}
 	return nil
 }

@@ -75,6 +75,7 @@ export interface SystemInfo {
   instanceName: string
   version: string
   externalUrl: string
+  httpsOnly: boolean
   diskUsedBytes: number
   airports: number
   servers: number
@@ -138,6 +139,8 @@ export interface Profile {
   id: number
   name: string
   note: string
+  /** 订阅名：URL 路径段 /s/<slug>/<token>；空 = 旧式 /s/<token>。 */
+  slug: string
   templateId: number
   templateName: string
   enabled: boolean
@@ -193,11 +196,6 @@ export interface ImportPreview {
   errors: { line: number; reason: string }[]
   ignored: number
   saved: number
-}
-
-export interface CaddyConfig {
-  domain: string
-  port: number
 }
 
 export interface BackupResult {

@@ -59,6 +59,39 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   return <div className="label-xs">{children}</div>
 }
 
+/** 开关：受控组件，disabled 时视觉与交互同步关闭。 */
+export function Switch({
+  checked,
+  onChange,
+  disabled = false,
+  label,
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  disabled?: boolean
+  label?: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative h-5.5 w-10 shrink-0 rounded-full transition-colors ${
+        checked ? 'bg-accent' : 'bg-line'
+      } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:opacity-90'}`}
+    >
+      <span
+        className={`absolute top-0.5 h-4.5 w-4.5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? 'translate-x-5' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  )
+}
+
 export function Spinner({ className = '' }: { className?: string }) {
   return <Loader2 size={14} className={`animate-spin ${className}`} aria-hidden />
 }

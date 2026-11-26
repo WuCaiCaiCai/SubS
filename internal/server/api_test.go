@@ -504,3 +504,73 @@ func TestSubscriptionBundleZip(t *testing.T) {
 		}
 	}
 }
+
+// slug 路由：/s/<slug>/<token> 可访问；创建/更新时校验非法 slug；
+// 唯一索引冲突返回 409。
+func TestProfileSlugRoutesAndValidation(t *testing.T) {
+	c, _ := newAPI(t)
+	c.do(http.MethodPost, "/api/servers", map[string]any{"name": "VPS"}, nil, 201)
+	c.do(http.MethodPost, "/api/nodes/import", map[string]any{
+		"sourceId": 1, "commit": true,
+		"text": "hy2://pw@hk.example.com:443?sni=hk.example.com#香港01",
+	}, nil, 200)
+	raw, _ := os.ReadFile("../render/testdata/client.yaml")
+	c.do(http.MethodPost, "/api/templates", map[string]any{"name": "Client", "content": string(raw)}, nil, 201)
+
+	// 非法 slug 被拒。
+	c.do(http.MethodPost, "/api/profiles", map[string]any{"name": "Bad", "templateId": 1, "slug": "Upper Case"}, nil, 400)
+	c.do(http.MethodPost, "/api/profiles", map[string]any{"name": "Bad", "templateId": 1, "slug": "-lead"}, nil, 400)
+	c.do(http.MethodPost, "/api/profiles", map[string]any{"name": "Bad", "templateId": 1, "slug": "healthz"}, nil, 400)
+
+	var p profileView
+	json.Unmarshal(c.do(http.MethodPost, "/api/profiles", map[string]any{"name": "P", "templateId": 1, "slug": "My-Family"}, nil, 201), &p)
+	if p.Slug != "my-family" {
+		t.Fatalf("slug not normalized: %q", p.Slug)
+	}
+	nodes := c.listNodes(t)
+	ids := []map[string]any{}
+	for _, n := range nodes {
+		ids = append(ids, map[string]any{"nodeId": n.ID})
+	}
+	c.do(http.MethodPut, "/api/profiles/1/nodes", ids, nil, 200)
+
+	// slug 路径可访问，旧裸 token 路径也保留。
+	for _, path := range []string{"/s/my-family/" + p.Token, "/s/" + p.Token} {
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		w := httptest.NewRecorder()
+		c.h.ServeHTTP(w, r)
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "hysteria2") {
+			t.Fatalf("%s status=%d body=%s", path, w.Code, w.Body.String())
+		}
+	}
+	// 下载文件名带 slug。
+	r := httptest.NewRequest(http.MethodGet, "/s/my-family/"+p.Token+"?download=1", nil)
+	w := httptest.NewRecorder()
+	c.h.ServeHTTP(w, r)
+	if !strings.Contains(w.Header().Get("Content-Disposition"), "my-family.yaml") {
+		t.Fatalf("disposition=%q", w.Header().Get("Content-Disposition"))
+	}
+	// bundle.zip 也带 slug。
+	r = httptest.NewRequest(http.MethodGet, "/s/my-family/"+p.Token+"/bundle.zip", nil)
+	w = httptest.NewRecorder()
+	c.h.ServeHTTP(w, r)
+	if !strings.Contains(w.Header().Get("Content-Disposition"), "my-family-subs.zip") {
+		t.Fatalf("bundle disposition=%q", w.Header().Get("Content-Disposition"))
+	}
+
+	// 第二个编排用相同 slug → 409。
+	c.do(http.MethodPost, "/api/profiles", map[string]any{"name": "P2", "templateId": 1, "slug": "my-family"}, nil, 409)
+
+	// 更新成合法 slug 后 URL 变化；清空 slug 退回旧路径。
+	var p2 profileView
+	json.Unmarshal(c.do(http.MethodPut, "/api/profiles/1", map[string]any{"slug": "daily"}, nil, 200), &p2)
+	if p2.Slug != "daily" {
+		t.Fatalf("update slug: %q", p2.Slug)
+	}
+	r = httptest.NewRequest(http.MethodGet, "/s/daily/"+p.Token, nil)
+	w = httptest.NewRecorder()
+	c.h.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("daily route status=%d", w.Code)
+	}
+}

@@ -115,7 +115,7 @@ export function ProfilesPage({ onNavigate }: { onNavigate: (path: string) => voi
                 {p.url ? (
                   <>
                     <code className="min-w-0 flex-1 truncate text-[0.6875rem] text-fg-muted" title={p.url}>
-                      /s/{p.token}
+                      /s/{p.slug ? `${p.slug}/` : ''}{p.token}
                     </code>
                     <CopyButton value={p.url} label="复制订阅链接" />
                   </>
@@ -185,6 +185,7 @@ function CreateProfileDialog({
 }) {
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
+  const [slug, setSlug] = useState('')
   const [templateId, setTemplateId] = useState<number | ''>('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -198,15 +199,22 @@ function CreateProfileDialog({
     setBusy(true)
     setError('')
     try {
+      const cleaned = slug.trim().toLowerCase()
+      if (cleaned && !/^[a-z0-9](-?[a-z0-9])*$/.test(cleaned)) {
+        setError('订阅名仅支持小写字母、数字与连字符，且不能以连字符开头/结尾')
+        return
+      }
       const p = await api.post<Profile>('/api/profiles', {
         name,
         note,
+        slug: cleaned,
         templateId,
         namingRule: { segments: ['index', 'region', 'protocol', 'rawName'], separator: '-', zeroPad: 2, upperProtocol: true },
       })
       toast('success', '编排已创建，继续选择节点')
       setName('')
       setNote('')
+      setSlug('')
       onCreated(p.id)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '创建失败')
@@ -240,6 +248,25 @@ function CreateProfileDialog({
         <label className="block space-y-1.5">
           <span className="text-[0.75rem] font-medium text-fg-soft">备注（可选）</span>
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-[0.75rem] font-medium text-fg-soft">订阅名（可选）</span>
+          <div className="flex items-center gap-1.5">
+            <span className="mono shrink-0 text-[0.7188rem] text-fg-subtle">/s/</span>
+            <input
+              className="input mono"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value.toLowerCase())}
+              placeholder="my-family"
+              maxLength={32}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <span className="mono shrink-0 text-[0.7188rem] text-fg-subtle">/&lt;token&gt;</span>
+          </div>
+          <span className="block text-[0.6875rem] text-fg-muted">
+            让订阅链接可读，如 <code className="mono">/s/my-family/9fQ…</code>；留空则用 <code className="mono">/s/&lt;token&gt;</code>。
+          </span>
         </label>
         <label className="block space-y-1.5">
           <span className="text-[0.75rem] font-medium text-fg-soft">模板</span>

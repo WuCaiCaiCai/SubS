@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/WuCaiCaiCai/SubS/internal/profile"
@@ -18,6 +19,7 @@ type profileView struct {
 	ID           int64           `json:"id"`
 	Name         string          `json:"name"`
 	Note         string          `json:"note"`
+	Slug         string          `json:"slug"`
 	TemplateID   int64           `json:"templateId"`
 	TemplateName string          `json:"templateName"`
 	Enabled      bool            `json:"enabled"`
@@ -66,7 +68,7 @@ func (s *Server) loadProfile(r *http.Request, id int64) (profileView, error) {
 	var note, lastFetch, rule, tokenEnc sql.NullString
 	var enabled int
 	err := s.Store.DB().QueryRowContext(r.Context(),
-		`SELECT p.id,p.name,COALESCE(p.note,''),p.template_id,COALESCE(t.name,''),p.enabled,
+		`SELECT p.id,p.name,COALESCE(p.note,''),COALESCE(p.slug,''),p.template_id,COALESCE(t.name,''),p.enabled,
 		        p.naming_rule,p.secret_token,COALESCE(p.last_fetch_at,''),
 		        (SELECT count(*) FROM profile_item i JOIN node n
 		              ON (i.kind='node' AND n.id=i.ref_id)
@@ -76,11 +78,12 @@ func (s *Server) loadProfile(r *http.Request, id int64) (profileView, error) {
 		                  SELECT 1 FROM profile_item x
 		                  WHERE x.profile_id=i.profile_id AND x.kind='node' AND x.ref_id=n.id)))
 		 FROM profile p LEFT JOIN template t ON t.id=p.template_id WHERE p.id=?`, id).
-		Scan(&v.ID, &v.Name, &note, &v.TemplateID, &v.TemplateName, &enabled, &rule, &tokenEnc, &lastFetch, &v.NodeCount)
+		Scan(&v.ID, &v.Name, &note, &v.Slug, &v.TemplateID, &v.TemplateName, &enabled, &rule, &tokenEnc, &lastFetch, &v.NodeCount)
 	if err != nil {
 		return v, err
 	}
 	v.Note = note.String
+	v.Slug = strings.ToLower(strings.TrimSpace(v.Slug))
 	v.Enabled = enabled != 0
 	v.LastFetchAt = lastFetch.String
 	if rule.Valid {
@@ -94,11 +97,47 @@ func (s *Server) loadProfile(r *http.Request, id int64) (profileView, error) {
 		if plain, err := s.decrypt(tokenEnc.String); err == nil {
 			v.Token = plain
 			if base := s.instanceURL(); base != "" {
-				v.URL = base + "/s/" + plain
+				// 有自定义订阅名时用 /s/<slug>/<token>，否则退回旧路径 /s/<token>。
+				path := "/s/" + plain
+				if v.Slug != "" {
+					path = "/s/" + v.Slug + "/" + plain
+				}
+				v.URL = base + path
 			}
 		}
 	}
 	return v, nil
+}
+
+// validateSlug 订阅名只允许小写字母/数字/连字符，作为 URL 路径段使用；
+// 为空合法（表示不使用自定义名，退回 /s/<token>）。保留字 "bundle.zip" 防碰撞。
+var slugRe = regexp.MustCompile(`^[a-z0-9](-?[a-z0-9])*$`)
+
+func validateSlug(s string) error {
+	if s == "" {
+		return nil
+	}
+	if len(s) > 32 {
+		return errors.New("订阅名最长 32 字符")
+	}
+	if !slugRe.MatchString(s) {
+		return errors.New("订阅名仅支持小写字母、数字与连字符，且不能以连字符开头/结尾")
+	}
+	if s == "bundle.zip" || s == "healthz" || s == "api" || s == "assets" {
+		return errors.New("该订阅名与内置路径冲突")
+	}
+	return nil
+}
+
+// isUniqueViolation 识别 SQLite 唯一约束冲突。modernc 驱动不暴露错误码，
+// 只能按文本匹配（"UNIQUE constraint failed"），覆盖英/中两种 message 形态。
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "UNIQUE constraint failed") ||
+		strings.Contains(msg, "idx_profile_slug")
 }
 
 func (s *Server) listProfiles(w http.ResponseWriter, r *http.Request) {
@@ -130,6 +169,7 @@ func (s *Server) createProfile(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name       string          `json:"name"`
 		Note       string          `json:"note"`
+		Slug       string          `json:"slug"`
 		TemplateID int64           `json:"templateId"`
 		NamingRule json.RawMessage `json:"namingRule"`
 	}
@@ -152,6 +192,19 @@ func (s *Server) createProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ruleJSON, _ := json.Marshal(rule)
+	slug := strings.ToLower(strings.TrimSpace(in.Slug))
+	if err := validateSlug(slug); err != nil {
+		fail(w, 400, "invalid_slug", err.Error())
+		return
+	}
+	if slug != "" {
+		var n int
+		if err := s.Store.DB().QueryRowContext(r.Context(),
+			"SELECT count(*) FROM profile WHERE slug=?", slug).Scan(&n); err == nil && n > 0 {
+			fail(w, 409, "slug_conflict", "订阅名已被另一个编排使用")
+			return
+		}
+	}
 	token, err := profile.NewToken()
 	if err != nil {
 		fail(w, 500, "token_failed", "生成订阅令牌失败")
@@ -163,10 +216,15 @@ func (s *Server) createProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := s.Store.DB().ExecContext(r.Context(),
-		`INSERT INTO profile(name,note,template_id,naming_rule,secret_token,token_hash)
-		 VALUES(?,?,?,?,?,?)`,
-		strings.TrimSpace(in.Name), nullString(in.Note), in.TemplateID, string(ruleJSON), enc, profile.HashToken(token))
+		`INSERT INTO profile(name,note,slug,template_id,naming_rule,secret_token,token_hash)
+		 VALUES(?,?,?,?,?,?,?)`,
+		strings.TrimSpace(in.Name), nullString(in.Note), slug, in.TemplateID, string(ruleJSON), enc, profile.HashToken(token))
 	if err != nil {
+		// 兜底并发场景：唯一索引仍然拦截（预检查与插入之间可能有并发写入）。
+		if isUniqueViolation(err) {
+			fail(w, 409, "slug_conflict", "订阅名已被另一个编排使用")
+			return
+		}
 		fail(w, 500, "database_error", "创建编排失败")
 		return
 	}
@@ -207,6 +265,7 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name       string          `json:"name"`
 		Note       string          `json:"note"`
+		Slug       *string         `json:"slug"`
 		TemplateID int64           `json:"templateId"`
 		Enabled    *bool           `json:"enabled"`
 		NamingRule json.RawMessage `json:"namingRule"`
@@ -242,6 +301,24 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ruleJSON, _ := json.Marshal(rule)
+	// slug 指针语义：null/缺省保持当前值；空串=清除自定义名；非空=校验后写入。
+	slug := ""
+	_ = s.Store.DB().QueryRowContext(r.Context(), "SELECT COALESCE(slug,'') FROM profile WHERE id=?", id).Scan(&slug)
+	if in.Slug != nil {
+		slug = strings.ToLower(strings.TrimSpace(*in.Slug))
+		if err := validateSlug(slug); err != nil {
+			fail(w, 400, "invalid_slug", err.Error())
+			return
+		}
+		if slug != "" {
+			var n int
+			if err := s.Store.DB().QueryRowContext(r.Context(),
+				"SELECT count(*) FROM profile WHERE slug=? AND id<>?", slug, id).Scan(&n); err == nil && n > 0 {
+				fail(w, 409, "slug_conflict", "订阅名已被另一个编排使用")
+				return
+			}
+		}
+	}
 	enabled := 1
 	if in.Enabled != nil {
 		if !*in.Enabled {
@@ -251,8 +328,12 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		_ = s.Store.DB().QueryRowContext(r.Context(), "SELECT enabled FROM profile WHERE id=?", id).Scan(&enabled)
 	}
 	if _, err := s.Store.DB().ExecContext(r.Context(),
-		"UPDATE profile SET name=?,note=?,template_id=?,enabled=?,naming_rule=? WHERE id=?",
-		name, nullString(in.Note), templateID, enabled, string(ruleJSON), id); err != nil {
+		"UPDATE profile SET name=?,note=?,slug=?,template_id=?,enabled=?,naming_rule=? WHERE id=?",
+		name, nullString(in.Note), slug, templateID, enabled, string(ruleJSON), id); err != nil {
+		if isUniqueViolation(err) {
+			fail(w, 409, "slug_conflict", "订阅名已被另一个编排使用")
+			return
+		}
 		fail(w, 500, "database_error", "更新编排失败")
 		return
 	}

@@ -4,7 +4,7 @@ const schema = `
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS instance (
  id INTEGER PRIMARY KEY CHECK(id=1), name TEXT NOT NULL DEFAULT 'my-subs',
- external_url TEXT, caddy_domain TEXT NOT NULL DEFAULT '', caddy_port INTEGER NOT NULL DEFAULT 8787,
+ external_url TEXT, https_only INTEGER NOT NULL DEFAULT 0,
  version TEXT NOT NULL DEFAULT 'dev', key_salt BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS admin (
@@ -40,8 +40,10 @@ CREATE TABLE IF NOT EXISTS profile (
  id INTEGER PRIMARY KEY, name TEXT NOT NULL, note TEXT,
  template_id INTEGER NOT NULL REFERENCES template(id), enabled INTEGER NOT NULL DEFAULT 1,
  naming_rule TEXT NOT NULL, secret_token TEXT NOT NULL UNIQUE,
- token_hash TEXT NOT NULL UNIQUE, last_fetch_at TEXT
+ token_hash TEXT NOT NULL UNIQUE, slug TEXT NOT NULL DEFAULT '', last_fetch_at TEXT
 );
+-- idx_profile_slug 在 migrate() 里创建：旧库升级到当前版本时，schema 阶段
+-- 还没有 slug 列，过早建索引会直接报 no such column。
 -- profile_node 是 v1 的遗留表，其数据由 migrate() 迁入 profile_item 后删除，
 -- 不再出现在新 schema 中（见 internal/store/store.go）。
 -- 也可以引用整个来源（kind='source'），后者在渲染时展开成该来源的当前节点，

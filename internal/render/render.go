@@ -78,6 +78,25 @@ func extraString(c protocol.Config, key string) string {
 	return ""
 }
 
+// extraInt 读取 Extra 里的整数字段；缺失时返回 def。
+func extraInt(c protocol.Config, key string, def int) int {
+	switch v := c.Extra[key].(type) {
+	case int:
+		if v != 0 {
+			return v
+		}
+	case int64:
+		if v != 0 {
+			return int(v)
+		}
+	case float64:
+		if v != 0 {
+			return int(v)
+		}
+	}
+	return def
+}
+
 // JSON marshalling helper that keeps insertion order irrelevant but output stable.
 func marshal(v any) string {
 	b, _ := json.MarshalIndent(v, "", "  ")

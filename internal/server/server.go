@@ -79,6 +79,7 @@ func randomToken(n int) (string, error) {
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 	r.Use(recoverMiddleware)
+	r.Use(s.httpsOnlyMiddleware)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/init", s.init)
@@ -90,9 +91,6 @@ func (s *Server) Router() http.Handler {
 		r.Use(s.requireAuth)
 		r.Get("/api/system", s.system)
 		r.Put("/api/system", s.csrf(s.updateSystem))
-		r.Get("/api/caddy", s.getCaddyConfig)
-		r.Put("/api/caddy", s.csrf(s.putCaddyConfig))
-		r.Get("/api/caddyfile", s.downloadCaddyFile)
 		r.Get("/api/airports", s.listAirports)
 		r.Post("/api/airports", s.csrf(s.createAirport))
 		r.Get("/api/airports/{id}", s.getAirport)
@@ -135,6 +133,9 @@ func (s *Server) Router() http.Handler {
 	})
 	r.Get("/s/{token}", s.subscription)
 	r.Get("/s/{token}/bundle.zip", s.subscriptionBundle)
+	// 自定义订阅名形式：/s/<slug>/<token>，slug 仅作 URL 可读段，鉴权仍靠 token。
+	r.Get("/s/{slug}/{token}", s.subscription)
+	r.Get("/s/{slug}/{token}/bundle.zip", s.subscriptionBundle)
 	r.Get("/admin/*", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", http.StatusTemporaryRedirect) })
 	r.Get("/*", s.serveFrontend)
 	return r
@@ -303,13 +304,43 @@ func clientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-// clientSecure 判断浏览器侧是否走 HTTPS：直连时看 TLS，反代时看 Caddy 加入的
+// clientSecure 判断浏览器侧是否走 HTTPS：直连时看 TLS，反代时看反代服务（Nginx/Caddy 等）加入的
 // X-Forwarded-Proto，这样会话 Cookie 才能正确带上 Secure 标记。
 func clientSecure(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
 	return isLoopbackAddr(r.RemoteAddr) && strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
+}
+
+// httpsOnlyMiddleware 在实例开启「仅 HTTPS 访问」后拒绝非加密连接。
+// 反向代理由用户自行配置，此处只认两类请求：直连 TLS、回环反代声明
+// X-Forwarded-Proto: https。开关关闭时不拦截，允许先用 HTTP 完成初始化
+// 和反代部署再开启。healthz 始终放行，便于本机监控探活。
+func (s *Server) httpsOnlyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" || clientSecure(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		var enabled int
+		_ = s.Store.DB().QueryRowContext(r.Context(),
+			"SELECT COALESCE(https_only,0) FROM instance WHERE id=1").Scan(&enabled)
+		if enabled == 0 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusUpgradeRequired)
+		_, _ = w.Write([]byte(`<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><title>SubS 需 HTTPS</title>` +
+			`<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#141417;color:#e9e9ee}` +
+			`main{max-width:28rem;padding:2rem}h1{font-size:1.1rem;margin:0 0 .5rem}p{line-height:1.7;color:#a0a0aa}code{background:#22222a;padding:.1rem .4rem;border-radius:4px}</style></head>` +
+			`<body><main><h1>此实例已开启「仅 HTTPS 访问」</h1>` +
+			`<p>当前连接未加密（明文 HTTP），已被拒绝。请通过 HTTPS 域名访问管理面板与订阅链接。</p>` +
+			`<p>如需临时解除限制：通过 HTTPS 登录后在「设置」关闭开关。</p>` +
+			`<p><code>426 Upgrade Required</code></p></main></body></html>`))
+	})
 }
 
 func isLoopbackAddr(remoteAddr string) bool {
@@ -424,9 +455,10 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 	var name, dbVersion string
 	var external sql.NullString
+	var httpsOnly int
 	err := s.Store.DB().QueryRowContext(r.Context(),
-		"SELECT name,version,external_url FROM instance WHERE id=1").
-		Scan(&name, &dbVersion, &external)
+		"SELECT name,version,external_url,COALESCE(https_only,0) FROM instance WHERE id=1").
+		Scan(&name, &dbVersion, &external, &httpsOnly)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		fail(w, 500, "database_error", "读取系统状态失败")
 		return
@@ -451,6 +483,7 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 		"instanceName":  name,
 		"version":       appVersion,
 		"externalUrl":   external.String,
+		"httpsOnly":     httpsOnly != 0,
 		"diskUsedBytes": diskUsed,
 		"airports":      count("SELECT count(*) FROM airport"),
 		"servers":       count("SELECT count(*) FROM server"),
@@ -465,6 +498,7 @@ func (s *Server) updateSystem(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		InstanceName string `json:"instanceName"`
 		ExternalURL  string `json:"externalUrl"`
+		HTTPSOnly    *bool  `json:"httpsOnly"`
 	}
 	if decodeJSON(w, r, &in, 8192) != nil {
 		fail(w, 400, "invalid_input", "请求体格式错误")
@@ -488,10 +522,24 @@ func (s *Server) updateSystem(w http.ResponseWriter, r *http.Request) {
 		}
 		ext = strings.TrimSuffix(ext, "/")
 	}
+	// httpsOnly 缺省（nil）保持当前值：浏览器 fetch 不方便发 PATCH 语义。
+	httpsOnly := 0
+	if in.HTTPSOnly != nil {
+		if *in.HTTPSOnly {
+			httpsOnly = 1
+		}
+	} else {
+		_ = s.Store.DB().QueryRowContext(r.Context(), "SELECT COALESCE(https_only,0) FROM instance WHERE id=1").Scan(&httpsOnly)
+	}
+	// 开启前检查：当前请求本身必须是加密连接，否则开关一开自己就被锁在门外。
+	if httpsOnly == 1 && !clientSecure(r) {
+		fail(w, 400, "not_secure", "当前连接非 HTTPS，无法开启仅 HTTPS 访问；请先通过 HTTPS 域名访问")
+		return
+	}
 	if _, err := s.Store.DB().ExecContext(r.Context(),
-		"UPDATE instance SET name=?,external_url=? WHERE id=1", name, nullString(ext)); err != nil {
+		"UPDATE instance SET name=?,external_url=?,https_only=? WHERE id=1", name, nullString(ext), httpsOnly); err != nil {
 		fail(w, 500, "database_error", "保存设置失败")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"instanceName": name, "externalUrl": ext})
+	writeJSON(w, 200, map[string]any{"instanceName": name, "externalUrl": ext, "httpsOnly": httpsOnly != 0})
 }

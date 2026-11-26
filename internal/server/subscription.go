@@ -45,6 +45,7 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 	}
 	asFile := r.URL.Query().Get("download") == "1"
 	res, err := s.renderProfile(r, profileID, target)
+
 	if err != nil {
 		notFound(w)
 		return
@@ -54,7 +55,7 @@ func (s *Server) subscription(w http.ResponseWriter, r *http.Request) {
 
 	h := w.Header()
 	h.Set("Cache-Control", "private, no-store")
-	h.Set("Content-Disposition", contentDisposition(target, asFile))
+	h.Set("Content-Disposition", contentDisposition(target, s.profileSlug(r, profileID), asFile))
 	h.Set("Profile-Update-Interval", "24")
 	// 节点名可能含非 ASCII 字符，HTTP 头要求 ASCII：先 URL 编码。
 	h.Set("X-Skipped-Count", strconv.Itoa(len(res.Skipped)))
@@ -96,9 +97,10 @@ func (s *Server) subscriptionBundle(w http.ResponseWriter, r *http.Request) {
 	}
 	var profileID int64
 	var profileName string
+	var slug sql.NullString
 	err := s.Store.DB().QueryRowContext(r.Context(),
-		"SELECT id, name FROM profile WHERE token_hash=? AND enabled=1", profile.HashToken(token)).
-		Scan(&profileID, &profileName)
+		"SELECT id,name,slug FROM profile WHERE token_hash=? AND enabled=1", profile.HashToken(token)).
+		Scan(&profileID, &profileName, &slug)
 	if errors.Is(err, sql.ErrNoRows) || err != nil {
 		notFound(w)
 		return
@@ -148,13 +150,24 @@ func (s *Server) subscriptionBundle(w http.ResponseWriter, r *http.Request) {
 	h := w.Header()
 	h.Set("Cache-Control", "private, no-store")
 	h.Set("Content-Type", "application/zip")
-	h.Set("Content-Disposition", `attachment; filename="`+bundleName(profileName)+`"; filename*=UTF-8''`+url.PathEscape(profileName+"-subs.zip"))
+	zipBase := bundleBaseName(profileName)
+	if slug.Valid && slug.String != "" {
+		zipBase = slug.String
+	}
+	h.Set("Content-Disposition", `attachment; filename="`+zipBase+`-subs.zip"`)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(buf.Bytes())
 }
 
-// bundleName keeps the zip filename ASCII-safe.
-func bundleName(profileName string) string {
+// profileSlug 读取订阅名；查询失败按空处理（仅影响文件名，不影响鉴权）。
+func (s *Server) profileSlug(r *http.Request, profileID int64) string {
+	var slug sql.NullString
+	_ = s.Store.DB().QueryRowContext(r.Context(), "SELECT slug FROM profile WHERE id=?", profileID).Scan(&slug)
+	return strings.ToLower(strings.TrimSpace(slug.String))
+}
+
+// bundleBaseName keeps the zip filename ASCII-safe.
+func bundleBaseName(profileName string) string {
 	var b strings.Builder
 	for _, r := range profileName {
 		switch {
@@ -182,16 +195,23 @@ func isTarget(name string) bool {
 }
 
 // contentDisposition picks a filename that matches the negotiated format.
-func contentDisposition(target string, asFile bool) string {
-	name := map[string]string{
+// 有自定义订阅名时文件名用 <slug>.yaml/.json/.conf，客户端导入时显示的
+// 订阅名也随之更直观；否则退回 subs.yaml 等通用名。
+func contentDisposition(target, slug string, asFile bool) string {
+	ext := map[string]string{
 		render.TargetMihomo:  "subs.yaml",
 		render.TargetSingBox: "subs.json",
 		render.TargetLoon:    "subs.conf",
 	}[target]
-	if asFile {
-		return `attachment; filename="` + name + `"`
+	name := ext
+	if slug != "" {
+		name = slug + ext[len(ext)-5:] // .yaml/.json/.conf 都恰好 5 字符
 	}
-	return `inline; filename="` + name + `"`
+	disposition := "inline"
+	if asFile {
+		disposition = "attachment"
+	}
+	return disposition + `; filename="` + name + `"`
 }
 
 // targetFromUA maps a client User-Agent to a render target.

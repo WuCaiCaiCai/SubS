@@ -72,7 +72,6 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	// Snapshot under the store backup lock so writes are paused briefly.
 	var snapshot []byte
-	var caddySnapshot []byte
 	err := s.Store.WithBackup(r.Context(), func(db *sql.DB) error {
 		path, err := s.snapshotDB(r)
 		if err != nil {
@@ -80,17 +79,7 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 		}
 		defer os.Remove(path)
 		snapshot, err = os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		var c CaddyConfig
-		if err := db.QueryRowContext(r.Context(), "SELECT caddy_domain,caddy_port FROM instance WHERE id=1").Scan(&c.Domain, &c.Port); err != nil {
-			return err
-		}
-		if c.Validate() == nil {
-			caddySnapshot = []byte(c.Render())
-		}
-		return nil
+		return err
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrBackupInProgress) {
@@ -112,9 +101,6 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 	metaJSON, _ := json.MarshalIndent(meta, "", "  ")
 
 	archiveFiles := map[string][]byte{"metadata.json": metaJSON, "db.sqlite": snapshot}
-	if caddySnapshot != nil {
-		archiveFiles["caddy/Caddyfile"] = caddySnapshot
-	}
 	archive, err := buildArchive(archiveFiles, in.Password)
 	if err != nil {
 		fail(w, 500, "backup_failed", "加密备份失败")
@@ -247,20 +233,7 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "restore_failed", "替换数据库失败: "+err.Error())
 		return
 	}
-	var restored CaddyConfig
-	if err := s.Store.DB().QueryRowContext(r.Context(), "SELECT caddy_domain,caddy_port FROM instance WHERE id=1").Scan(&restored.Domain, &restored.Port); err != nil {
-		fail(w, 500, "restore_failed", "数据库已恢复，但读取反向代理配置失败")
-		return
-	}
-	if restored.Validate() == nil {
-		if err := s.writeCaddyFile(restored); err != nil {
-			fail(w, 500, "restore_failed", "数据库已恢复，但写入 Caddyfile 失败")
-			return
-		}
-	} else {
-		_ = os.Remove(filepath.Join(s.DataDir, "Caddyfile"))
-	}
-	writeJSON(w, 200, map[string]any{"ok": true, "message": "恢复完成，请重新登录；如需启用 Caddy，请 SSH 运行配置脚本"})
+	writeJSON(w, 200, map[string]any{"ok": true, "message": "恢复完成，请重新登录"})
 }
 
 // destroy wipes the instance after verifying the confirmation phrase and a

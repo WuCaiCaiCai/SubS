@@ -112,6 +112,37 @@ rules:
 	}
 }
 
+// include-all 组会由 Mihomo 自行展开全部节点，自动补名会造成重复；
+// 有 # subs:nodes 标记的模板也不应触发回退逻辑。
+func TestRenderMihomoAutoFixSkipsIncludeAllAndMarkers(t *testing.T) {
+	tmpl := `proxies: ~
+proxy-groups:
+  - name: All
+    type: select
+    include-all: true
+    proxies:
+      - DIRECT
+  - name: P2
+    type: select
+    # subs:nodes
+    proxies: []
+rules:
+  - MATCH,All
+`
+	res, err := Render(TargetMihomo, tmpl, testNodes()[:2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	// include-all 组不得被追加节点名（否则与自动展开重复）。
+	if strings.Contains(res.Body, "    proxies:\n      - DIRECT\n      - 01-HK-HY2") {
+		t.Fatalf("include-all group must stay untouched:\n%s", res.Body)
+	}
+	// 标记组照常注入。
+	if !strings.Contains(res.Body, "- 01-HK-HY2") {
+		t.Fatalf("marker group must be injected:\n%s", res.Body)
+	}
+}
+
 func TestValidateRejectsUnknownMarker(t *testing.T) {
 	issues, _ := ValidateTemplate("proxies: []\n# subs:bogus\nproxy-groups: []\n")
 	found := false
@@ -188,5 +219,32 @@ func TestRenderMihomoMieruPortRange(t *testing.T) {
 	}
 	if p["username"] != "alice" || p["password"] != "s3cret" {
 		t.Errorf("credentials missing: %v", p)
+	}
+}
+func TestRenderMihomoDefaultTemplateGroupsGetNodes(t *testing.T) {
+	// WebUI 新建模板的默认内容：没有 # subs: 标记，组里只有 DIRECT。
+	tmpl := `mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+external-controller: 127.0.0.1:9090
+
+proxies:
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+      - DIRECT
+
+rules:
+  - MATCH,PROXY
+`
+	res, err := Render(TargetMihomo, tmpl, testNodes()[:2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Body, "- 01-HK-HY2") {
+		t.Fatalf("BUG: nodes never appear in any group:\n%s", res.Body)
 	}
 }

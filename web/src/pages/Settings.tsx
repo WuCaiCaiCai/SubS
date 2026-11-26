@@ -1,44 +1,25 @@
 import { useEffect, useState } from 'react'
-import { Download, Save, Settings2, ShieldCheck, Terminal } from 'lucide-react'
-import { api, ApiError, type CaddyConfig, type SystemInfo } from '../lib/api'
+import { Lock, Save, Settings2, ShieldCheck, Terminal } from 'lucide-react'
+import { api, ApiError, type SystemInfo } from '../lib/api'
 import { toast, useAsync } from '../lib/hooks'
-import { Badge, ErrorNote, SectionLabel, SkeletonRows, Spinner } from '../components/ui'
+import { Badge, ErrorNote, SectionLabel, SkeletonRows, Spinner, Switch } from '../components/ui'
 
 export function SettingsPage() {
   const system = useAsync(() => api.get<SystemInfo>('/api/system'))
   const [name, setName] = useState('')
   const [externalUrl, setExternalUrl] = useState('')
+  const [httpsOnly, setHttpsOnly] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [savedAt, setSavedAt] = useState(0)
-  const [caddy, setCaddy] = useState<CaddyConfig>({ domain: '', port: 8787 })
-  const [caddyBusy, setCaddyBusy] = useState(false)
-  const [caddyError, setCaddyError] = useState('')
-  const [caddyfile, setCaddyfile] = useState('')
 
   useEffect(() => {
     const s = system.data
     if (!s) return
     setName(s.instanceName)
     setExternalUrl(s.externalUrl ?? '')
-    api.get<CaddyConfig>('/api/caddy').then(setCaddy).catch(() => undefined)
+    setHttpsOnly(s.httpsOnly)
   }, [system.data])
-
-  const saveCaddy = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setCaddyBusy(true)
-    setCaddyError('')
-    try {
-      const result = await api.put<{ config: CaddyConfig; caddyfile: string }>('/api/caddy', caddy)
-      setCaddy(result.config)
-      setCaddyfile(result.caddyfile)
-      toast('success', 'Caddy 配置已保存')
-    } catch (err) {
-      setCaddyError(err instanceof ApiError ? err.message : '保存 Caddy 配置失败')
-    } finally {
-      setCaddyBusy(false)
-    }
-  }
 
   const saveGeneral = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,6 +37,25 @@ export function SettingsPage() {
     }
   }
 
+  const toggleHttpsOnly = async (next: boolean) => {
+    // 开启前确认当前连接已是 HTTPS，否则开关一开就把浏览器自己锁在外面。
+    if (next && window.location.protocol !== 'https:') {
+      toast('error', '当前连接非 HTTPS，无法开启该开关')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await api.put('/api/system', { httpsOnly: next })
+      setHttpsOnly(next)
+      toast('success', next ? '已开启仅 HTTPS 访问' : '已关闭仅 HTTPS 访问')
+      system.reload()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '保存失败')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   if (system.loading) return <SkeletonRows rows={4} />
   if (system.error) return <ErrorNote>{system.error.message}</ErrorNote>
@@ -102,37 +102,32 @@ export function SettingsPage() {
           </button>
         </form>
 
+        <section className="card space-y-3.5 p-4">
+          <div className="flex items-center gap-2">
+            <Lock size={14} className="text-accent" />
+            <h2 className="text-[0.8125rem] font-semibold">仅支持 HTTPS 访问</h2>
+            {httpsOnly && <Badge tone="emerald">已启用</Badge>}
+          </div>
+          <p className="text-[0.75rem] leading-relaxed text-fg-muted">
+            开启后拒绝所有未加密（明文 HTTP）请求，包括管理面板与订阅链接。反向代理与证书（Caddy、Nginx、宝塔等）由你自行部署，本实例只信任直连 TLS 或代理转发的
+            <code className="mono">X-Forwarded-Proto: https</code>。
+          </p>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-canvas p-3">
+            <div className="text-[0.75rem]">
+              <div className="font-medium text-fg-soft">拒绝明文连接</div>
+              <div className="mt-0.5 text-[0.6875rem] text-fg-muted">
+                {httpsOnly ? '非 HTTPS 请求返回 426，健康检查 /healthz 除外' : '当前允许 HTTP 与 HTTPS 访问'}
+              </div>
+            </div>
+            <Switch checked={httpsOnly} disabled={busy} onChange={toggleHttpsOnly} />
+          </div>
+          {window.location.protocol !== 'https:' && (
+            <p className="text-[0.6875rem] text-warning">
+              当前页面通过 HTTP 访问，需先配置 HTTPS（如 Caddy / Nginx 反代）再开启此开关。
+            </p>
+          )}
+        </section>
       </div>
-
-      <form onSubmit={saveCaddy} className="card space-y-3.5 p-4">
-        <div className="flex items-center gap-2">
-          <ShieldCheck size={14} className="text-success" />
-          <h2 className="text-[0.8125rem] font-semibold">Caddy HTTPS 反向代理</h2>
-          <Badge tone="amber">手动部署</Badge>
-        </div>
-        <p className="max-w-3xl text-[0.75rem] leading-relaxed text-fg-muted">
-          生成仅代理到本机 SubS 的 Caddyfile，并纳入加密备份。保存不会安装、重载 Caddy 或更改监听地址；请先将 SubS 监听改为 127.0.0.1，再由服务器管理员部署配置。Caddy 会自动申请并续期公网证书，域名 DNS 必须指向本机且 80/443 可达。
-        </p>
-        <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
-          <label className="block space-y-1.5">
-            <span className="text-[0.75rem] font-medium text-fg-soft">公网域名</span>
-            <input className="input mono" value={caddy.domain} onChange={(e) => setCaddy({ ...caddy, domain: e.target.value })} placeholder="subs.example.com" autoComplete="off" />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-[0.75rem] font-medium text-fg-soft">本机上游端口</span>
-            <input className="input mono" type="number" min={1} max={65535} value={caddy.port} onChange={(e) => setCaddy({ ...caddy, port: Number(e.target.value) })} />
-          </label>
-        </div>
-        {caddyError && <ErrorNote>{caddyError}</ErrorNote>}
-        <div className="flex flex-wrap gap-2">
-          <button type="submit" className="btn btn-primary" disabled={caddyBusy}>
-            {caddyBusy ? <Spinner /> : <Save size={14} />} 保存配置
-          </button>
-          {caddy.domain && <a className="btn" href="/api/caddyfile"><Download size={14} /> 下载 Caddyfile</a>}
-        </div>
-        {caddyfile && <pre className="mono overflow-x-auto rounded border border-line bg-canvas p-3 text-[0.7188rem] leading-relaxed text-fg-soft">{caddyfile}</pre>}
-        <p className="text-[0.6875rem] text-fg-muted">跨服务器恢复只迁移域名和代理配置，不包含 Caddy 证书或私钥；在目标机部署后会重新签发。Caddyfile 导出接口需管理员登录。</p>
-      </form>
 
       <section className="card p-4">
         <div className="flex items-center gap-2">
