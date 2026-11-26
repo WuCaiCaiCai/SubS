@@ -10,6 +10,8 @@
 6. `docs/测试与验收清单.md` — 自动化与手动测试范围
 7. `docs/部署与CLI命令规范.md` — 部署与命令行行为
 8. `DECISIONS.md` — 已拍板决策日志（有冲突时以最新决策为准）
+9. `WORKLOG.md` — 工作日志：最近改动、踩坑备忘、未完事项（暂停维护时优先读这个）
+10. `TODO.md` — 待办与发布清单
 
 ## 已锁定的技术决策（不可由 AI 会话单方面推翻）
 
@@ -36,7 +38,7 @@
 /web/dist 构建产物 embed 进二进制
 /install.sh           # 安装脚本
 /docs/*.md            # 上述设计文档
-/README.md、TODO.md、DECISIONS.md、AGENTS.md  # 仓库根只保留导航与决策类文件
+/README.md、TODO.md、DECISIONS.md、AGENTS.md、WORKLOG.md  # 仓库根只保留导航与决策类文件
 ```
 
 ## 验证要求（每次改动后必须执行，全绿才能算完成）

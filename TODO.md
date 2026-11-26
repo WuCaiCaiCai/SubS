@@ -106,3 +106,19 @@
 - 流程：提交 → 打 tag `v0.2.3` → CI 构建发布 → 服务器 `curl | bash` 重装。
 - 安装命令不变：`curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.sh | sudo bash`；想装指定版本加 `SUBS_VERSION=v0.2.3`。
 - 重装为同数据目录覆盖安装时数据保留；彻底重来可 `SUBS_DATA_DIR` 指新目录或先清 `/var/lib/subs`。
+
+## 已修复但未发布（commit `63fdf23`，v0.2.4 待发）
+
+**开关点击无响应 / 需整页刷新**
+
+- 根因 1（仅 HTTPS 开关）：后端 `updateSystem` 强制校验 `instanceName` 非空，而前端 toggle 只发 `{ httpsOnly: next }`，被 400 拒绝并报「实例名需为 1-64 个字符」。修复：实例名留空表示「保持不变」，传了才校验长度。
+- 根因 2（节点开关）：`toggleNode` 成功后调 `nodes.reload()` 重拉整个列表，期间 `nodes.loading` 为真、列表退回 SkeletonRows，数据回来才重渲染，视觉上是「点一下没反应，整页闪一下」。修复：改为乐观更新（立即翻转 → 服务器返回值覆盖 → 失败回弹），不再触发整体 reload。
+- 同样的乐观更新也应用到 Settings 的 httpsOnly 开关；`saveGeneral` 改用接口返回值回填，不再依赖 `system.reload()`。
+- 已验证：`go build` / `go vet` / `go test ./...` / `tsc --noEmit` / `npm run build` 全绿。
+- **未做**：浏览器实点验证（Playwright 起实例需登录造数据，成本较高；该改动的失败模式直观——要么立即折叠、要么回弹报错）。代码在本地 `main`，未推送、未打 tag，线上仍是 v0.2.3。
+
+**恢复维护时下一步**
+
+1. `git push origin main` + `git tag v0.2.4` → CI 构建发布。
+2. 服务器重装：`curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.sh | sudo bash`。
+3. 重装后手动点两个开关确认即时响应（设置页「拒绝明文连接」、节点列表右侧开关）。
