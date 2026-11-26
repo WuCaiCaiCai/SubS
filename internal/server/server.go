@@ -18,10 +18,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/WuCaiCaiCai/SubS"
 	"github.com/WuCaiCaiCai/SubS/internal/secrets"
 	"github.com/WuCaiCaiCai/SubS/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 var errAlreadyInitialized = errors.New("already initialized")
@@ -90,6 +90,9 @@ func (s *Server) Router() http.Handler {
 		r.Use(s.requireAuth)
 		r.Get("/api/system", s.system)
 		r.Put("/api/system", s.csrf(s.updateSystem))
+		r.Get("/api/caddy", s.getCaddyConfig)
+		r.Put("/api/caddy", s.csrf(s.putCaddyConfig))
+		r.Get("/api/caddyfile", s.downloadCaddyFile)
 		r.Get("/api/airports", s.listAirports)
 		r.Post("/api/airports", s.csrf(s.createAirport))
 		r.Get("/api/airports/{id}", s.getAirport)
@@ -284,11 +287,38 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.createSession(w, r, username)
 }
 func clientIP(r *http.Request) string {
+	// 仅在来自回环地址（如 Caddy 反代）时信任 X-Forwarded-For，避免直连公网时
+	// 被客户端伪造头部绕过限流与审计 IP。
+	if isLoopbackAddr(r.RemoteAddr) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if first, _, found := strings.Cut(xff, ","); found || first != "" {
+				return strings.TrimSpace(first)
+			}
+		}
+	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err == nil {
 		return host
 	}
 	return r.RemoteAddr
+}
+
+// clientSecure 判断浏览器侧是否走 HTTPS：直连时看 TLS，反代时看 Caddy 加入的
+// X-Forwarded-Proto，这样会话 Cookie 才能正确带上 Secure 标记。
+func clientSecure(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return isLoopbackAddr(r.RemoteAddr) && strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
+}
+
+func isLoopbackAddr(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 func (s *Server) allowLogin(ip string) bool {
 	s.loginMu.Lock()
@@ -334,7 +364,7 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request, username 
 		return
 	}
 	csrf, _ := randomToken(32)
-	secure := r.TLS != nil
+	secure := clientSecure(r)
 	http.SetCookie(w, &http.Cookie{Name: "subs_session", Value: id, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: exp, MaxAge: 86400, Secure: secure})
 	http.SetCookie(w, &http.Cookie{Name: "subs_csrf", Value: csrf, Path: "/", SameSite: http.SameSiteLaxMode, Expires: exp, MaxAge: 86400, Secure: secure})
 	writeJSON(w, 200, map[string]string{"username": username, "csrfToken": csrf})
@@ -380,7 +410,7 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	csrf, _ := randomToken(32)
-	http.SetCookie(w, &http.Cookie{Name: "subs_csrf", Value: csrf, Path: "/", SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil, MaxAge: 86400})
+	http.SetCookie(w, &http.Cookie{Name: "subs_csrf", Value: csrf, Path: "/", SameSite: http.SameSiteLaxMode, Secure: clientSecure(r), MaxAge: 86400})
 	writeJSON(w, 200, map[string]string{"username": username, "csrfToken": csrf})
 }
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {

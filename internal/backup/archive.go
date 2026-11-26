@@ -88,8 +88,17 @@ func Read(data []byte, password string) (map[string][]byte, error) {
 		if err != nil {
 			return nil, errors.New("备份格式错误")
 		}
-		if hdr.Name != "metadata.json" && hdr.Name != "db.sqlite" {
+		if hdr.Size < 0 || hdr.Size > MaxSize {
+			return nil, errors.New("备份文件过大")
+		}
+		if hdr.Name != "metadata.json" && hdr.Name != "db.sqlite" && hdr.Name != "caddy/Caddyfile" {
+			if _, err := io.CopyN(io.Discard, tr, hdr.Size); err != nil {
+				return nil, errors.New("备份格式错误")
+			}
 			continue
+		}
+		if _, exists := out[hdr.Name]; exists {
+			return nil, errors.New("备份包含重复成员")
 		}
 		if hdr.Size > MaxSize {
 			return nil, errors.New("备份文件过大")

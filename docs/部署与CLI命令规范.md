@@ -21,6 +21,21 @@ curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.
 9. `systemctl enable` + `restart`（升级时也能加载新 unit），健康检查后输出**对外 IP** 访问地址、初始化密钥、防火墙放行提示与 HTTPS 反代警告
 
 升级：重跑安装命令 → 备份数据库快照到 `/var/lib/subs/pre-upgrade-<ts>.db` → 替换二进制（旧的保留为 `/usr/local/bin/subs.old`）→ 重启；失败可手动回滚二进制。
+
+### Caddy 反向代理配置
+
+设置页可保存域名与本机上游端口，并下载受限生成的 `Caddyfile`。此功能只生成/保存配置，不安装或控制 Caddy/systemd。需要管理员手动安装 Caddy、将 SubS 监听改为 `127.0.0.1:<端口>`，并把文件接入现有 Caddy 服务。公网 DNS 必须指向服务器，Caddy 自动签发证书要求对应验证端口可达（通常 80/443）。不要把管理服务继续暴露在公网明文 HTTP。
+
+`.sbox` 会加密包含 Caddy 域名配置和生成文件；不包含 Caddy 证书/私钥。迁移到新主机后需手动部署，Caddy 会在新主机重新申请证书。
+
+推荐迁移顺序：
+
+1. 在新 VPS 先运行 SubS 基础安装脚本，选择 `127.0.0.1` 监听（若计划只通过 HTTPS 访问），并完成服务启动。
+2. 从 WebUI 恢复 `.sbox`；域名与上游端口会恢复，恢复不会自动改新主机 systemd，也不会立即接管 Caddy。
+3. SSH 登录新 VPS，确认已安装 Caddy，检查恢复的 `/var/lib/subs/Caddyfile`，运行 `sudo ./configure-caddy.sh`。脚本将站点片段导入 Caddy 主配置，保留并备份原配置，先 validate 再 reload，失败会回滚。
+4. 再按实际环境配置 DNS、防火墙/安全组、其他 Caddy 站点和系统服务。确认新域名 HTTPS 与 SubS 登录均正常后，再关闭旧主机。
+
+脚本默认读取 `/var/lib/subs/Caddyfile`，主配置为 `/etc/caddy/Caddyfile`。自定义路径可用 `--data-dir`、`--caddyfile` 或 `CADDY_SUBS_FILE`。不要在未审阅的情况下将任意来源的 Caddyfile 交给 root 脚本。
 卸载：`subs uninstall` → 询问是否保留数据，停服务删 unit/二进制/用户，按选择处理数据目录。
 
 ## 2. 本地 CLI 子命令（需 root 或 subs 用户，在 VPS 上执行）

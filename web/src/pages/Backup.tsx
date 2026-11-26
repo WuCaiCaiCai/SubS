@@ -77,7 +77,7 @@ export function BackupPage() {
         const body = await res.json().catch(() => ({}))
         throw new ApiError(res.status, body.code ?? 'restore_failed', body.message ?? '恢复失败')
       }
-      toast('success', '恢复完成，正在重新登录…')
+      toast('success', '恢复完成；如需启用 Caddy，请 SSH 配置 Caddy，正在重新登录…')
       window.setTimeout(() => {
         window.location.href = '/'
       }, 1200)
@@ -94,7 +94,7 @@ export function BackupPage() {
         <SectionLabel>workspace / backup</SectionLabel>
         <h1 className="mt-1 text-page font-semibold tracking-tight">备份与恢复</h1>
         <p className="mt-1 text-[0.7812rem] text-fg-muted">
-          导出的 <code className="mono">.sbox</code> 包含数据库与全部凭据，使用 age 加密，密码一旦丢失无法找回。
+          导出的 <code className="mono">.sbox</code> 包含数据库、全部凭据及已配置的 Caddy 反代文件，使用 age 加密；不包含 Caddy 证书/私钥，密码一旦丢失无法找回。
         </p>
       </header>
 

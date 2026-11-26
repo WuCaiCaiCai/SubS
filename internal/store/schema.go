@@ -4,7 +4,8 @@ const schema = `
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS instance (
  id INTEGER PRIMARY KEY CHECK(id=1), name TEXT NOT NULL DEFAULT 'my-subs',
- external_url TEXT, version TEXT NOT NULL DEFAULT 'dev', key_salt BLOB NOT NULL
+ external_url TEXT, caddy_domain TEXT NOT NULL DEFAULT '', caddy_port INTEGER NOT NULL DEFAULT 8787,
+ version TEXT NOT NULL DEFAULT 'dev', key_salt BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS admin (
  id INTEGER PRIMARY KEY CHECK(id=1), username TEXT NOT NULL,
@@ -24,7 +25,7 @@ CREATE TABLE IF NOT EXISTS server (
 );
 CREATE TABLE IF NOT EXISTS node (
  id INTEGER PRIMARY KEY, source_type TEXT NOT NULL CHECK(source_type IN ('airport','server')),
- source_id INTEGER NOT NULL, protocol TEXT NOT NULL CHECK(protocol IN ('hy2','vless','tuic','anytls','mieru')),
+ source_id INTEGER NOT NULL, protocol TEXT NOT NULL CHECK(protocol IN ('hy2','vless','tuic','anytls','mieru','ss','vmess','trojan')),
  raw_name TEXT NOT NULL, fingerprint TEXT NOT NULL, config TEXT NOT NULL,
  enabled INTEGER NOT NULL DEFAULT 1, missing INTEGER NOT NULL DEFAULT 0,
  is_new INTEGER NOT NULL DEFAULT 0, tags TEXT

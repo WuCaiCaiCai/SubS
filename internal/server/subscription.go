@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/WuCaiCaiCai/SubS/internal/profile"
 	"github.com/WuCaiCaiCai/SubS/internal/render"
+	"github.com/go-chi/chi/v5"
 )
 
 // subscription serves the public, token-authenticated profile endpoint.

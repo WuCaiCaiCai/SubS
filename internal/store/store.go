@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -124,8 +125,77 @@ func migrateListenColumns(db *sql.DB) error {
 	return err
 }
 
+func ensureColumn(db *sql.DB, table, column, definition string) error {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return err
+	}
+	found := false
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, typ string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &defaultValue, &pk); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if name == column {
+			found = true
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if found {
+		return nil
+	}
+	_, err = db.Exec("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition)
+	return err
+}
+
+func migrateProtocolConstraint(db *sql.DB) error {
+	rows, err := db.Query("SELECT sql FROM sqlite_master WHERE type='table' AND name='node'")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return rows.Err()
+	}
+	var ddl string
+	if err := rows.Scan(&ddl); err != nil {
+		return err
+	}
+	if strings.Contains(ddl, "'trojan'") {
+		return nil
+	}
+	_, err = db.Exec(`BEGIN;
+ALTER TABLE node RENAME TO node_legacy_protocol;
+CREATE TABLE node (
+ id INTEGER PRIMARY KEY, source_type TEXT NOT NULL CHECK(source_type IN ('airport','server')),
+ source_id INTEGER NOT NULL, protocol TEXT NOT NULL CHECK(protocol IN ('hy2','vless','tuic','anytls','mieru','ss','vmess','trojan')),
+ raw_name TEXT NOT NULL, fingerprint TEXT NOT NULL, config TEXT NOT NULL,
+ enabled INTEGER NOT NULL DEFAULT 1, missing INTEGER NOT NULL DEFAULT 0,is_new INTEGER NOT NULL DEFAULT 0,tags TEXT);
+INSERT INTO node SELECT * FROM node_legacy_protocol;
+DROP TABLE node_legacy_protocol;
+CREATE INDEX IF NOT EXISTS idx_node_source ON node(source_type,source_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_node_fp ON node(source_type,source_id,fingerprint);
+COMMIT;`)
+	return err
+}
+
 func migrate(db *sql.DB) error {
 	if err := migrateListenColumns(db); err != nil {
+		return err
+	}
+	// Rebuild node because SQLite CHECK constraints cannot be widened in place.
+	if err := migrateProtocolConstraint(db); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "instance", "caddy_domain", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := ensureColumn(db, "instance", "caddy_port", "INTEGER NOT NULL DEFAULT 8787"); err != nil {
 		return err
 	}
 	// v1 → v2: per-node selection becomes profile_item(kind='node').

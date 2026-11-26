@@ -63,7 +63,7 @@ export const api = {
 
 // ---- domain types -------------------------------------------------------
 
-export type Protocol = 'hy2' | 'vless' | 'tuic' | 'anytls' | 'mieru'
+export type Protocol = 'hy2' | 'vless' | 'tuic' | 'anytls' | 'mieru' | 'ss' | 'vmess' | 'trojan'
 
 export interface Me {
   username: string
@@ -193,6 +193,11 @@ export interface ImportPreview {
   errors: { line: number; reason: string }[]
   ignored: number
   saved: number
+}
+
+export interface CaddyConfig {
+  domain: string
+  port: number
 }
 
 export interface BackupResult {
