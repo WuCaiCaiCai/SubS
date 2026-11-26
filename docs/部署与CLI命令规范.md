@@ -16,7 +16,7 @@ curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.
 4. 创建系统用户 `subs`（无登录 shell）
 5. 建数据目录 `/var/lib/subs/`（owner subs，0700）
 6. 生成一次性初始化密钥：写入 `/var/lib/subs/init-token`（0600，属主 subs），安装结束时直接打印在终端；程序启动时若未传 `--init-token` 则自动读取该文件
-7. 交互询问监听地址，默认 `0.0.0.0:8787`（对外直连）；可用 `SUBS_LISTEN` 预置，填 `127.0.0.1:8787` 则仅本机 + 反代
+7. 交互询问监听地址与端口：地址默认 `0.0.0.0`（对外直连），填 `127.0.0.1` 则仅本机 + 反代；端口默认 `8787`，校验 1-65535。也可用 `SUBS_BIND` / `SUBS_PORT` 预置，或用 `SUBS_LISTEN=host:port` 一次性指定
 8. 写 systemd unit（`/etc/systemd/system/subs.service`），`Restart=on-failure`，`ProtectSystem=strict` + `ReadWritePaths=/var/lib/subs`，`ExecStart` 带 `--data-dir` 与 `--listen`
 9. 启动服务并健康检查，输出访问地址、初始化密钥、防火墙放行提示与 HTTPS 反代警告
 

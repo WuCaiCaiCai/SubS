@@ -73,9 +73,18 @@ tar -xzf "$WORK/$ASSET" -C "$WORK"
 
 DATA_DIR="$(ask "数据目录 [${DATA_DIR}]: " "$DATA_DIR")"
 
-# 监听地址：默认对外监听，反代与直连都能用；直连为明文 HTTP，因此在下面提示。
-LISTEN="${SUBS_LISTEN:-0.0.0.0:8787}"
-LISTEN="$(ask "监听地址（0.0.0.0:8787 对外直连 / 127.0.0.1:8787 仅本机 + 反代）[${LISTEN}]: " "$LISTEN")"
+# 监听地址与端口分开问：地址决定是谁能连，端口常需要避开已占用/被扫的端口。
+LISTEN_ADDR="${SUBS_BIND:-0.0.0.0}"
+LISTEN_PORT="${SUBS_PORT:-8787}"
+if [[ -n "${SUBS_LISTEN:-}" ]]; then
+  LISTEN_ADDR="${SUBS_LISTEN%:*}"
+  LISTEN_PORT="${SUBS_LISTEN##*:}"
+fi
+LISTEN_ADDR="$(ask "监听地址（0.0.0.0 对外直连 / 127.0.0.1 仅本机 + 反代）[${LISTEN_ADDR}]: " "$LISTEN_ADDR")"
+LISTEN_PORT="$(ask "监听端口 [${LISTEN_PORT}]: " "$LISTEN_PORT")"
+[[ "$LISTEN_PORT" =~ ^[0-9]+$ ]] && (( LISTEN_PORT >= 1 && LISTEN_PORT <= 65535 )) \
+  || die "端口必须是 1-65535 的整数，收到：$LISTEN_PORT"
+LISTEN="${LISTEN_ADDR}:${LISTEN_PORT}"
 
 if id "$SERVICE" >/dev/null 2>&1; then
   step "系统用户 ${SERVICE} 已存在"

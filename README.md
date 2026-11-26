@@ -20,7 +20,7 @@ SubS 只做三件事：**收进来、理清楚、发出去**。
 curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.sh | sudo bash
 ```
 
-推送 `v*` tag 后，GitHub Actions 会运行测试、构建 Linux x64 二进制并发布 Release，同时上传安装脚本与 SHA-256 校验文件（v0.1beta 起已验证可用）。安装时会询问监听地址，默认 `0.0.0.0:8787` 便于直接访问；直连是明文 HTTP，建议改用 Nginx/Caddy 反代并启用 HTTPS（安装时填 `127.0.0.1:8787` 即仅本机监听）。初始化密钥会在安装结束时直接打印。
+推送 `v*` tag 后，GitHub Actions 会运行测试、构建 Linux x64 二进制并发布 Release，同时上传安装脚本与 SHA-256 校验文件（v0.1beta 起已验证可用）。安装时会询问监听地址与端口（默认 `0.0.0.0:8787`，端口可自定义，也可用 `SUBS_BIND` / `SUBS_PORT` 预置）；直连是明文 HTTP，建议改用 Nginx/Caddy 反代并启用 HTTPS（安装时填 `127.0.0.1:8787` 即仅本机监听）。初始化密钥会在安装结束时直接打印。
 
 ### 本地跑起来
 
