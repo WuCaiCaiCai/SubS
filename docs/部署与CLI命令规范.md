@@ -6,7 +6,7 @@
 curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.sh | sudo bash
 ```
 
-当前仓库尚无已验证的正式 Release；发布流程必须将 `install.sh` 与二进制压缩包、`checksums.txt` 一起上传。完成首次 Release 验证前，README 命令属于预定入口，不应宣称已可用。
+推送 `v*` tag 会触发 `.github/workflows/release.yml`：运行前端构建与 Go 测试，构建 Linux x64 二进制，并将安装脚本、压缩包和 `checksums.txt` 上传到 GitHub Release（v0.1beta 起已验证）。
 
 安装器行为（每步打印到 stdout，失败即停并说明回滚）：
 
