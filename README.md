@@ -7,7 +7,7 @@
 ## 它解决什么
 
 - 机场订阅每次刷新节点名乱变，客户端里的策略组天天失效
-- 自建节点散落在多个 VPS，协议五花八门（hy2 / vless / tuic / anytls / mieru）
+- 自建节点散落在多个 VPS，协议五花八门（hy2 / vless / tuic / anytls / mieru / Shadowsocks / VMess / Trojan）
 - 想给手机、软路由、家人各发一份配置，又不想把机场原始订阅链接给出去
 
 SubS 只做三件事：**收进来、理清楚、发出去**。
@@ -47,8 +47,11 @@ cd web && npm run dev   # 5173，已配置 /api 与 /s/ 代理到 8787
 | tuic | ✅ | ✅ | ✅ | ✅ |
 | anytls | ✅ | ✅ | ✅ | ✅ |
 | mieru | ✅ | ✅（需 Mihomo ≥ 1.19） | 跳过 | 跳过 |
+| Shadowsocks | ✅ | ✅ | ✅ | ✅ |
+| VMess | ✅ | ✅ | ✅ | ✅ |
+| Trojan | ✅ | ✅ | ✅ | ✅ |
 
-导入方式：分享链接逐行粘贴、Base64 订阅、Clash/Mihomo YAML，以及 mieru 客户端配置 JSON（`mieru export config` 的产物，可直接粘贴）。
+导入方式：分享链接逐行粘贴、Base64 订阅、Clash/Mihomo YAML，以及 mieru 客户端配置 JSON（`mieru export config` 的产物，可直接粘贴）。Shadowsocks、VMess、Trojan 支持分享链接与 Clash/Mihomo YAML 导入。
 
 目标不支持的节点不会静默丢失：输出文件头部会注释列出被跳过的节点名。
 

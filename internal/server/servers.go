@@ -203,7 +203,7 @@ func escapeLike(s string) string {
 
 func validProtocol(p string) bool {
 	switch p {
-	case "hy2", "vless", "tuic", "anytls", "mieru":
+	case "hy2", "vless", "tuic", "anytls", "mieru", "ss", "vmess", "trojan":
 		return true
 	}
 	return false

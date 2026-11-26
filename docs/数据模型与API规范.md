@@ -12,6 +12,8 @@ CREATE TABLE instance (
   id              INTEGER PRIMARY KEY CHECK (id = 1),
   name            TEXT NOT NULL DEFAULT 'my-subs', -- 实例名，销毁确认短语用
   external_url    TEXT,              -- 可选，生成订阅链接用
+  caddy_domain    TEXT NOT NULL DEFAULT '', -- 管理界面生成 Caddyfile 用
+  caddy_port      INTEGER NOT NULL DEFAULT 8787, -- Caddy 仅代理到本机此端口
   version         TEXT NOT NULL,
   key_salt        BLOB NOT NULL      -- 应用密钥派生盐
 );
@@ -50,7 +52,7 @@ CREATE TABLE node (
   id           INTEGER PRIMARY KEY,
   source_type  TEXT NOT NULL CHECK (source_type IN ('airport','server')),
   source_id    INTEGER NOT NULL,
-  protocol     TEXT NOT NULL CHECK (protocol IN ('hy2','vless','tuic','anytls','mieru')),
+  protocol     TEXT NOT NULL CHECK (protocol IN ('hy2','vless','tuic','anytls','mieru','ss','vmess','trojan')),
   raw_name     TEXT NOT NULL,          -- 原始名（机场给定或手填）
   fingerprint  TEXT NOT NULL,          -- 指纹：protocol+host+port+关键标识，用于刷新合并
   config       TEXT NOT NULL,          -- JSON，结构见协议规范（含明文凭据，整库加密盘上文件权限 0600 保护）
@@ -179,9 +181,12 @@ GET    /api/profiles/:id/naming-preview → 命名规则应用到当前节点集
 ```
 POST /api/backup           {password} → {downloadId, sha256}（短时一次性）
 GET  /api/backup/:downloadId  文件流（no-store）
-POST /api/restore          multipart 备份包 + password（校验后进入向导）
+POST /api/restore          multipart 备份包 + password（包含的 caddy/Caddyfile 会与配置一起恢复）
 POST /api/destroy          {confirmPhrase, backupSha256?}  必须 confirmPhrase=实例名，若未提供已下载备份的 sha256 则拒绝（除非 dryRun）
 GET  /api/system           → 版本、磁盘、机场/节点统计
+GET  /api/caddy            → {domain, port}
+PUT  /api/caddy            {domain, port} → 校验并保存受限 Caddy 配置
+GET  /api/caddyfile        → 下载生成的 Caddyfile（需管理认证）
 ```
 
 ### 订阅分发（无管理认证）

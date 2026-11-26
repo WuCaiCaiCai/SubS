@@ -313,7 +313,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                 }
               >
                 <option value="">全部协议</option>
-                {(['hy2', 'vless', 'tuic', 'anytls', 'mieru'] as Protocol[]).map((p) => (
+                {(['hy2', 'vless', 'tuic', 'anytls', 'mieru', 'ss', 'vmess', 'trojan'] as Protocol[]).map((p) => (
                   <option key={p} value={p}>
                     {p.toUpperCase()}
                   </option>
@@ -641,7 +641,7 @@ function ImportDialog({
       open={open}
       wide
       title="导入自建节点"
-      description="支持 hy2 / vless / tuic / anytls / mieru 分享链接，可一次粘贴多行、整段 base64 订阅，或直接贴 mieru 客户端配置 JSON。"
+      description="支持 hy2 / vless / tuic / anytls / mieru / Shadowsocks / VMess / Trojan 分享链接，可一次粘贴多行、整段 base64 订阅，或直接贴 mieru 客户端配置 JSON。"
       onClose={onClose}
       footer={
         <>

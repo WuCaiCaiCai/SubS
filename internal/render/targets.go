@@ -3,6 +3,8 @@ package render
 import (
 	"fmt"
 	"strings"
+
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
 )
 
 // renderSingBox builds a minimal sing-box config with one selector group.
@@ -53,6 +55,27 @@ func singBoxOutbound(n Node) (map[string]any, error) {
 		tls["insecure"] = true
 	}
 	switch c.Protocol {
+	case "ss":
+		ob["type"] = "shadowsocks"
+		ob["method"] = authString(c, "cipher")
+		ob["password"] = authString(c, "password")
+		if plugin := extraString(c, "plugin"); plugin != "" {
+			ob["plugin"] = map[string]any{"type": strings.Split(plugin, ";")[0], "options": plugin}
+		}
+	case "vmess":
+		ob["type"] = "vmess"
+		ob["uuid"] = authString(c, "uuid")
+		ob["alter_id"] = authInt(c, "alterId")
+		ob["security"] = authString(c, "cipher")
+		if transportString(c, "security") == "tls" {
+			ob["tls"] = tls
+		}
+		singBoxTransport(ob, c)
+	case "trojan":
+		ob["type"] = "trojan"
+		ob["password"] = authString(c, "password")
+		ob["tls"] = tls
+		singBoxTransport(ob, c)
 	case "hy2":
 		ob["type"] = "hysteria2"
 		ob["password"] = authString(c, "password")
@@ -112,6 +135,25 @@ func singBoxOutbound(n Node) (map[string]any, error) {
 	return ob, nil
 }
 
+func singBoxTransport(ob map[string]any, c protocol.Config) {
+	switch transportString(c, "network") {
+	case "ws":
+		ob["transport"] = map[string]any{"type": "ws", "path": transportString(c, "wsPath"), "headers": map[string]any{"Host": transportString(c, "wsHost")}}
+	case "grpc":
+		ob["transport"] = map[string]any{"type": "grpc", "service_name": transportString(c, "grpcService")}
+	}
+}
+
+func authInt(c protocol.Config, key string) int {
+	switch v := c.Auth[key].(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	}
+	return 0
+}
+
 // renderLoon builds the Loon [Proxy] and [Proxy Group] sections.
 func renderLoon(nodes []Node) (Result, error) {
 	var b strings.Builder
@@ -145,6 +187,27 @@ func loonProxyLine(n Node) (string, error) {
 	c := n.Config
 	base := fmt.Sprintf("%s, %s, %d", n.Name, c.Host, c.Port)
 	switch c.Protocol {
+	case "ss":
+		parts := []string{base, authString(c, "cipher"), "password=" + authString(c, "password")}
+		if p := extraString(c, "plugin"); p != "" {
+			parts = append(parts, "obfs="+p)
+		}
+		return "shadowsocks=" + strings.Join(parts, ", "), nil
+	case "vmess":
+		parts := []string{base, "uuid=" + authString(c, "uuid"), "alterId=" + fmt.Sprint(authInt(c, "alterId")), "cipher=" + authString(c, "cipher")}
+		if transportString(c, "security") == "tls" {
+			parts = append(parts, "tls=true")
+		}
+		if sni := transportString(c, "sni"); sni != "" {
+			parts = append(parts, "sni="+sni)
+		}
+		return "vmess=" + strings.Join(parts, ", "), nil
+	case "trojan":
+		parts := []string{base, "password=" + authString(c, "password")}
+		if sni := transportString(c, "sni"); sni != "" {
+			parts = append(parts, "sni="+sni)
+		}
+		return "trojan=" + strings.Join(parts, ", "), nil
 	case "hy2":
 		parts := []string{base, "password=" + authString(c, "password")}
 		if sni := transportString(c, "sni"); sni != "" {

@@ -31,7 +31,9 @@ const (
 // Supports reports whether a protocol can be rendered for a target.
 func Supports(target, proto string) bool {
 	switch target {
-	case TargetSingBox, TargetLoon:
+	case TargetSingBox:
+		return proto != "mieru"
+	case TargetLoon:
 		return proto != "mieru"
 	}
 	return true

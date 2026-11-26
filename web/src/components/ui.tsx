@@ -31,6 +31,9 @@ const protocolTone: Record<string, 'cyan' | 'sky' | 'orange' | 'emerald' | 'neut
   tuic: 'emerald',
   anytls: 'orange',
   mieru: 'neutral',
+  ss: 'neutral',
+  vmess: 'neutral',
+  trojan: 'neutral',
 }
 
 export function ProtocolBadge({ protocol }: { protocol: string }) {

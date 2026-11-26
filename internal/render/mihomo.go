@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
 )
 
 // kv is one ordered mapping entry, so generated proxies keep name/type/server
@@ -36,6 +38,33 @@ func proxyEntries(n Node) ([]kv, error) {
 		set("port", c.Port)
 	}
 	switch c.Protocol {
+	case "ss":
+		set("type", "ss")
+		set("cipher", authString(c, "cipher"))
+		set("password", authString(c, "password"))
+		if plugin := extraString(c, "plugin"); plugin != "" {
+			set("plugin", plugin)
+		}
+	case "vmess":
+		set("type", "vmess")
+		set("uuid", authString(c, "uuid"))
+		set("alterId", authInt(c, "alterId"))
+		set("cipher", authString(c, "cipher"))
+		if transportBool(c, "tls") || transportString(c, "security") == "tls" {
+			set("tls", true)
+		}
+		if sni := transportString(c, "sni"); sni != "" {
+			set("servername", sni)
+		}
+		setVMessTransport(set, c)
+	case "trojan":
+		set("type", "trojan")
+		set("password", authString(c, "password"))
+		set("tls", true)
+		if sni := transportString(c, "sni"); sni != "" {
+			set("sni", sni)
+		}
+		setVMessTransport(set, c)
 	case "hy2":
 		set("type", "hysteria2")
 		set("password", authString(c, "password"))
@@ -149,6 +178,21 @@ func proxyEntries(n Node) ([]kv, error) {
 		out = append(out, kv{Key: k, Value: m[k]})
 	}
 	return out, nil
+}
+
+func setVMessTransport(set func(string, any), c protocol.Config) {
+	switch transportString(c, "network") {
+	case "ws":
+		opts := map[string]any{"path": transportString(c, "wsPath")}
+		if host := transportString(c, "wsHost"); host != "" {
+			opts["headers"] = map[string]any{"Host": host}
+		}
+		set("network", "ws")
+		set("ws-opts", opts)
+	case "grpc":
+		set("network", "grpc")
+		set("grpc-opts", map[string]any{"grpc-service-name": transportString(c, "grpcService")})
+	}
 }
 
 // renderMihomo injects nodes into a user template via YAML AST edits.

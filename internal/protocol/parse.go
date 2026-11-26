@@ -68,6 +68,8 @@ func ParseLine(line string) (Result, error) {
 	}
 	var cfg Config
 	switch strings.ToLower(scheme) {
+	case "ss", "vmess", "trojan":
+		cfg, err = parseLegacyShare(u, strings.ToLower(scheme))
 	case "hy2", "hysteria2":
 		cfg, err = parseHy2(u)
 	case "vless":

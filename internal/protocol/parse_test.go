@@ -96,11 +96,11 @@ func TestParseSubscriptionClashYAML(t *testing.T) {
     password: pw
 `
 	parsed, errs, ignored := ParseSubscription([]byte(body))
-	if len(parsed) != 2 {
+	if len(parsed) != 3 {
 		t.Fatalf("parsed=%d errs=%+v", len(parsed), errs)
 	}
-	if ignored != 1 {
-		t.Fatalf("ignored=%d want 1", ignored)
+	if ignored != 0 {
+		t.Fatalf("ignored=%d want 0", ignored)
 	}
 	if parsed[1].Config.Transport["network"] != "ws" || parsed[1].Config.Transport["wsPath"] != "/ws" {
 		t.Fatalf("ws transport lost: %+v", parsed[1].Config.Transport)

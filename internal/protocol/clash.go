@@ -62,6 +62,43 @@ func clashProxyToConfig(p map[string]any) (Config, error) {
 		"fingerprint": str(p["client-fingerprint"]),
 	}
 	switch typ {
+	case "ss", "shadowsocks":
+		method, password := str(p["cipher"]), str(p["password"])
+		if method == "" || password == "" {
+			return Config{}, fmt.Errorf("Shadowsocks 缺少 cipher/password")
+		}
+		return Config{Protocol: "ss", Host: host, Port: port, Auth: map[string]any{"cipher": method, "password": password}, Transport: tls, Extra: map[string]any{}}, nil
+	case "vmess":
+		uuid := str(p["uuid"])
+		if !validUUID(uuid) {
+			return Config{}, fmt.Errorf("UUID 格式无效")
+		}
+		network := firstNonEmpty(str(p["network"]), "tcp")
+		ws, _ := p["ws-opts"].(map[string]any)
+		grpc, _ := p["grpc-opts"].(map[string]any)
+		security := "none"
+		if boolOf(p["tls"]) {
+			security = "tls"
+		}
+		tls["security"] = security
+		tls["network"] = network
+		if ws != nil {
+			tls["wsPath"] = str(ws["path"])
+			if h, ok := ws["headers"].(map[string]any); ok {
+				tls["wsHost"] = str(h["Host"])
+			}
+		}
+		if grpc != nil {
+			tls["grpcService"] = str(grpc["grpc-service-name"])
+		}
+		return Config{Protocol: "vmess", Host: host, Port: port, Auth: map[string]any{"uuid": uuid, "alterId": intOf(p["alterId"]), "cipher": firstNonEmpty(str(p["cipher"]), "auto")}, Transport: tls, Extra: map[string]any{}}, nil
+	case "trojan":
+		password := str(p["password"])
+		if password == "" {
+			return Config{}, fmt.Errorf("Trojan 缺少 password")
+		}
+		tls["security"] = "tls"
+		return Config{Protocol: "trojan", Host: host, Port: port, Auth: map[string]any{"password": password}, Transport: tls, Extra: map[string]any{}}, nil
 	case "hysteria2", "hy2":
 		if str(p["password"]) == "" {
 			return Config{}, fmt.Errorf("缺少 password")
