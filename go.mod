@@ -1,4 +1,4 @@
-module github.com/wucai/subs
+module github.com/WuCaiCaiCai/SubS
 
 go 1.27.4
 

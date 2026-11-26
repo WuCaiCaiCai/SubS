@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # SubS 安装器 —— 一条命令部署到自有 VPS。
 #
-#   curl -fsSL https://raw.githubusercontent.com/wucai/subs/main/install.sh | bash
+#   curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.sh | sudo bash
 #
 # 可选环境变量：
-#   SUBS_REPO       GitHub 仓库（owner/name），默认 wucai/subs
+#   SUBS_REPO       GitHub 仓库（owner/name），默认 WuCaiCaiCai/SubS
 #   SUBS_VERSION    指定版本标签（如 v0.1.0），默认取最新 Release
-#   SUBS_LISTEN     监听地址，默认 127.0.0.1:8787
 #   SUBS_DATA_DIR   数据目录，默认 /var/lib/subs
 #   SUBS_SERVICE    服务名，默认 subs
 #   SUBS_YES=1      跳过所有交互确认
 set -euo pipefail
 
-REPO="${SUBS_REPO:-wucai/subs}"
+REPO="${SUBS_REPO:-WuCaiCaiCai/SubS}"
 VERSION="${SUBS_VERSION:-latest}"
-LISTEN="${SUBS_LISTEN:-127.0.0.1:8787}"
+INSTALLER_VERSION="${SUBS_INSTALLER_VERSION:-}"
+REQUESTED_VERSION="${SUBS_VERSION:-}"
 DATA_DIR="${SUBS_DATA_DIR:-/var/lib/subs}"
 SERVICE="${SUBS_SERVICE:-subs}"
 BIN_PATH="/usr/local/bin/subs"
@@ -45,11 +45,16 @@ need() { command -v "$1" >/dev/null 2>&1 || die "缺少依赖：$1"; }
 need curl
 need tar
 
+if [[ -z "$INSTALLER_VERSION" ]]; then
+  step "获取安装器版本"
+  API_JSON="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest")" || die "无法获取最新 Release"
+  INSTALLER_VERSION="$(printf '%s' "$API_JSON" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
+  [[ -n "$INSTALLER_VERSION" ]] || die "GitHub 未返回 Release 标签"
+fi
+VERSION="${REQUESTED_VERSION:-$INSTALLER_VERSION}"
+
 if [[ "$VERSION" == "latest" ]]; then
-  step "查询最新版本"
-  VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)" || true
-  [[ -n "$VERSION" ]] || die "无法获取最新版本，可用 SUBS_VERSION=v0.1.0 指定"
+  VERSION="$INSTALLER_VERSION"
 fi
 step "目标版本：${VERSION}"
 
@@ -66,9 +71,6 @@ step "校验 sha256"
   || die "校验失败，安装包可能被篡改"
 tar -xzf "$WORK/$ASSET" -C "$WORK"
 
-step "确认监听地址"
-LISTEN="$(ask "监听地址 [${LISTEN}]: " "$LISTEN")"
-[[ "$LISTEN" =~ ^[^:]+:[0-9]+$ ]] || die "监听地址格式应为 host:port"
 DATA_DIR="$(ask "数据目录 [${DATA_DIR}]: " "$DATA_DIR")"
 
 if id "$SERVICE" >/dev/null 2>&1; then
@@ -102,7 +104,7 @@ Wants=network-online.target
 Type=simple
 User=${SERVICE}
 Group=${SERVICE}
-ExecStart=${BIN_PATH} --data-dir ${DATA_DIR} --listen ${LISTEN}
+ExecStart=${BIN_PATH} --data-dir ${DATA_DIR} --listen 127.0.0.1:8787
 Restart=on-failure
 RestartSec=3
 ProtectSystem=strict
@@ -120,15 +122,17 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now "$SERVICE"
 
-step "生成一次性初始化密钥"
-INIT_TOKEN="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | cut -c1-32)"
-printf '%s\n' "$INIT_TOKEN" >"$DATA_DIR/init-token"
-chown "${SERVICE}:${SERVICE}" "$DATA_DIR/init-token"
-chmod 600 "$DATA_DIR/init-token"
+INIT_TOKEN=""
+if [[ ! -e "$DATA_DIR/subs.db" && ! -e "$DATA_DIR/init-token" ]]; then
+  step "生成一次性初始化密钥"
+  INIT_TOKEN="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | cut -c1-32)"
+  printf '%s\n' "$INIT_TOKEN" >"$DATA_DIR/init-token"
+  chown "${SERVICE}:${SERVICE}" "$DATA_DIR/init-token"
+  chmod 600 "$DATA_DIR/init-token"
+fi
 
-PROBE_HOST="${LISTEN%%:*}"
-PROBE_PORT="${LISTEN##*:}"
-[[ "$PROBE_HOST" == "0.0.0.0" ]] && PROBE_HOST=127.0.0.1
+PROBE_HOST=127.0.0.1
+PROBE_PORT=8787
 HEALTHY=""
 for _ in $(seq 1 20); do
   if curl -fsS -o /dev/null "http://${PROBE_HOST}:${PROBE_PORT}/healthz"; then HEALTHY=1; break; fi
@@ -144,8 +148,8 @@ fi
 cat <<INFO
 
 控制台：http://${PROBE_HOST}:${PROBE_PORT}/
-初始化密钥：${INIT_TOKEN}
-  （24 小时内一次性使用；首次登录时与管理员密码一起提交）
+${INIT_TOKEN:+初始化密钥：${INIT_TOKEN}}
+${INIT_TOKEN:+  （请立即保存；首次初始化时与管理员密码一起提交）}
 
 常用命令：
   systemctl status ${SERVICE}
@@ -154,8 +158,10 @@ cat <<INFO
   ${BIN_PATH} reset-password --data-dir ${DATA_DIR}
 
 注意：
-  · 默认只监听本地回环，建议用 Nginx/Caddy 反代并启用 HTTPS 后再对外
+  · 默认只监听 127.0.0.1:8787；需更改请编辑 systemd unit 的 --listen 参数并重启
+  · 建议用 Nginx/Caddy 反代并启用 HTTPS 后再对外
   · 订阅链接中的节点信息是凭据，公开前务必确认域名不在公共索引里
+  · 初始化密钥也保存在 ${DATA_DIR}/init-token（权限 0600）；升级时不会重置
   · 升级：重跑本脚本（会自动覆盖二进制并重启）
   · 卸载：${BIN_PATH} uninstall（保留数据）或 systemctl stop ${SERVICE} 后手动清理
 INFO

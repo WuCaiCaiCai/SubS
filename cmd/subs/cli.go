@@ -12,13 +12,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/wucai/subs/internal/backup"
-	"github.com/wucai/subs/internal/secrets"
-	"github.com/wucai/subs/internal/store"
+	"github.com/WuCaiCaiCai/SubS/internal/backup"
+	"github.com/WuCaiCaiCai/SubS/internal/secrets"
+	"github.com/WuCaiCaiCai/SubS/internal/store"
 )
 
 // The CLI is the break-glass path: it runs as root or the subs user on the VPS
@@ -311,39 +310,6 @@ func humanBytes(n int64) string {
 	return fmt.Sprintf("%.1f TiB", v/unit)
 }
 
-// cmdListen rewrites the stored listen host/port and prints a restart hint.
-func cmdListen(args []string) error {
-	fs := flag.NewFlagSet("listen", flag.ExitOnError)
-	dataDir := fs.String("data-dir", defaultDataDir(), "数据目录")
-	rest, err := parseFlags(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(rest) < 2 {
-		return errors.New("用法: subs listen <host> <port>")
-	}
-	host := rest[0]
-	port, err := strconv.Atoi(rest[1])
-	if err != nil || port < 1 || port > 65535 {
-		return errors.New("端口无效")
-	}
-	db, err := openStore(*dataDir)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	res, err := db.DB().ExecContext(context.Background(),
-		"UPDATE instance SET listen_host=?, listen_port=? WHERE id=1", host, port)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return errors.New("实例尚未初始化")
-	}
-	fmt.Printf("监听地址已设置为 %s:%d\n请同步修改 systemd unit 的 --listen 参数并重启服务\n", host, port)
-	return nil
-}
-
 // cmdStatus prints a health summary without exposing secrets.
 func cmdStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
@@ -357,13 +323,13 @@ func cmdStatus(args []string) error {
 	}
 	defer db.Close()
 	ctx := context.Background()
-	var name, host string
-	var port int
+	var name string
 	err = db.DB().QueryRowContext(ctx,
-		"SELECT name,listen_host,listen_port FROM instance WHERE id=1").Scan(&name, &host, &port)
+		"SELECT name FROM instance WHERE id=1").Scan(&name)
 	if err != nil {
 		return fmt.Errorf("读取实例信息失败：%w", err)
 	}
+	version := "dev"
 	counts := []struct {
 		label string
 		query string
@@ -374,7 +340,7 @@ func cmdStatus(args []string) error {
 		{"配置", "SELECT count(*) FROM profile"},
 		{"模板", "SELECT count(*) FROM template"},
 	}
-	fmt.Printf("实例 %s  监听 %s:%d  版本 %s\n", name, host, port, version)
+	fmt.Printf("实例 %s  版本 %s\n", name, version)
 	for _, c := range counts {
 		var n int
 		if err := db.DB().QueryRowContext(ctx, c.query).Scan(&n); err != nil {

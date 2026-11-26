@@ -74,8 +74,6 @@ export interface Me {
 export interface SystemInfo {
   instanceName: string
   version: string
-  listenHost: string
-  listenPort: number
   externalUrl: string
   diskUsedBytes: number
   airports: number

@@ -14,15 +14,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/wucai/subs"
-	"github.com/wucai/subs/internal/secrets"
-	"github.com/wucai/subs/internal/store"
+	"github.com/WuCaiCaiCai/SubS"
+	"github.com/WuCaiCaiCai/SubS/internal/secrets"
+	"github.com/WuCaiCaiCai/SubS/internal/store"
 )
 
 var errAlreadyInitialized = errors.New("already initialized")
@@ -90,7 +89,6 @@ func (s *Server) Router() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/api/system", s.system)
-		r.Put("/api/system/listen", s.csrf(s.listen))
 		r.Put("/api/system", s.csrf(s.updateSystem))
 		r.Get("/api/airports", s.listAirports)
 		r.Post("/api/airports", s.csrf(s.createAirport))
@@ -247,7 +245,7 @@ func (s *Server) init(w http.ResponseWriter, r *http.Request) {
 		if _, e := tx.ExecContext(r.Context(), "INSERT INTO admin(id,username,secret_password_hash) VALUES(1,?,?)", in.Username, hash); e != nil {
 			return e
 		}
-		_, e := tx.ExecContext(r.Context(), "INSERT OR IGNORE INTO instance(id,name,listen_host,listen_port,version,key_salt) VALUES(1,'my-subs','127.0.0.1',8787,'dev',randomblob(16))")
+		_, e := tx.ExecContext(r.Context(), "INSERT OR IGNORE INTO instance(id,name,version,key_salt) VALUES(1,'my-subs','dev',randomblob(16))")
 		return e
 	})
 	if errors.Is(err, errAlreadyInitialized) {
@@ -394,12 +392,11 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 func (s *Server) system(w http.ResponseWriter, r *http.Request) {
-	var name, host, dbVersion string
-	var port int
+	var name, dbVersion string
 	var external sql.NullString
 	err := s.Store.DB().QueryRowContext(r.Context(),
-		"SELECT name,listen_host,listen_port,version,external_url FROM instance WHERE id=1").
-		Scan(&name, &host, &port, &dbVersion, &external)
+		"SELECT name,version,external_url FROM instance WHERE id=1").
+		Scan(&name, &dbVersion, &external)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		fail(w, 500, "database_error", "读取系统状态失败")
 		return
@@ -423,8 +420,6 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
 		"instanceName":  name,
 		"version":       appVersion,
-		"listenHost":    host,
-		"listenPort":    port,
 		"externalUrl":   external.String,
 		"diskUsedBytes": diskUsed,
 		"airports":      count("SELECT count(*) FROM airport"),
@@ -469,24 +464,4 @@ func (s *Server) updateSystem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"instanceName": name, "externalUrl": ext})
-}
-
-func (s *Server) listen(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Host string `json:"host"`
-		Port int    `json:"port"`
-	}
-	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&in) != nil || strings.TrimSpace(in.Host) == "" || in.Port < 1024 || in.Port > 65535 {
-		fail(w, 400, "invalid_listen", "监听地址或端口无效")
-		return
-	}
-	err := s.Store.Write(r.Context(), func(tx *sql.Tx) error {
-		_, e := tx.ExecContext(r.Context(), "UPDATE instance SET listen_host=?,listen_port=? WHERE id=1", in.Host, in.Port)
-		return e
-	})
-	if err != nil {
-		fail(w, 500, "database_error", "保存监听设置失败")
-		return
-	}
-	writeJSON(w, 200, map[string]string{"host": in.Host, "port": strconv.Itoa(in.Port)})
 }

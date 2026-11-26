@@ -1,5 +1,5 @@
 // Package protocol parses share links into the unified node config
-// representation described in 协议解析与配置生成规范.md.
+// representation described in docs/协议解析与配置生成规范.md.
 package protocol
 
 import (

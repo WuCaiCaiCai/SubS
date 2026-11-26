@@ -95,7 +95,39 @@ func (s *Store) ReplaceWith(ctx context.Context, newPath, dbPath string) error {
 
 // migrate moves data written by older versions into the current shape. Every
 // step must be idempotent: it runs on each start.
+func migrateListenColumns(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(instance)`)
+	if err != nil {
+		return err
+	}
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, typ string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &defaultValue, &pk); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		columns[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if !columns["listen_host"] && !columns["listen_port"] {
+		return nil
+	}
+	_, err = db.Exec(`BEGIN; ALTER TABLE instance DROP COLUMN listen_host; ALTER TABLE instance DROP COLUMN listen_port; COMMIT;`)
+	if err != nil {
+		_, _ = db.Exec(`ROLLBACK`)
+	}
+	return err
+}
+
 func migrate(db *sql.DB) error {
+	if err := migrateListenColumns(db); err != nil {
+		return err
+	}
 	// v1 → v2: per-node selection becomes profile_item(kind='node').
 	// profile_node is emptied after copying so the step is a no-op next time.
 	_, err := db.Exec(`

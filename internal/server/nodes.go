@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wucai/subs/internal/protocol"
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
 )
 
 type nodeView struct {

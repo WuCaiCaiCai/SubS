@@ -1,56 +1,69 @@
-name: release
+name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: 构建前端
-        run: cd web && npm ci && npm run build
+      - name: Build frontend
+        run: |
+          cd web
+          npm ci
+          npm run build
 
-      - name: 测试
-        run: go vet ./... && go test ./...
+      - name: Verify Go code
+        run: |
+          go vet ./...
+          go test ./...
 
-      - name: 交叉编译
+      - name: Build Linux x64 release assets
         env:
-          CGO_ENABLED: "0"
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME:-dev}"
-          mkdir -p out
-          for arch in amd64 arm64; do
-            GOOS=linux GOARCH="$arch" go build -trimpath \
-              -ldflags "-s -w -X main.version=${VERSION}" \
-              -o "out/subs" ./cmd/subs
-            tar -czf "out/subs_${VERSION}_linux_${arch}.tar.gz" -C out subs
-            rm -f out/subs
-          done
-          cd out && sha256sum ./*.tar.gz > checksums.txt && cat checksums.txt
+          version="${GITHUB_REF_NAME}"
+          mkdir -p dist/release
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${version}" \
+            -o dist/release/subs ./cmd/subs
+          tar -C dist/release -czf "dist/release/subs_${version}_linux_amd64.tar.gz" subs
+          cp install.sh dist/release/install.sh
+          cd dist/release
+          sha256sum "subs_${version}_linux_amd64.tar.gz" > checksums.txt
+          cat checksums.txt
 
-      - name: 发布
+      - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            out/*.tar.gz
-            out/checksums.txt
+            dist/release/subs_*_linux_amd64.tar.gz
+            dist/release/checksums.txt
+            dist/release/install.sh
           generate_release_notes: true

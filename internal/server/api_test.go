@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wucai/subs/internal/profile"
-	"github.com/wucai/subs/internal/protocol"
-	"github.com/wucai/subs/internal/secrets"
-	"github.com/wucai/subs/internal/store"
+	"github.com/WuCaiCaiCai/SubS/internal/profile"
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
+	"github.com/WuCaiCaiCai/SubS/internal/secrets"
+	"github.com/WuCaiCaiCai/SubS/internal/store"
 )
 
 // apiClient drives the authenticated API with cookies and CSRF headers.
@@ -135,7 +135,7 @@ func TestAirportServerNodeFlow(t *testing.T) {
 	}
 
 	// Template from the real reference file.
-	raw, err := os.ReadFile("../../模板示例/Router.yaml")
+	raw, err := os.ReadFile("../render/testdata/router.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestSubscriptionNegotiatesByUA(t *testing.T) {
 		"text": "hy2://pw@hk.example.com:443?sni=hk.example.com#香港01\n" +
 			"mieru://user:pw@hk.example.com:9000?sni=hk.example.com#香港Mieru\n",
 	}, nil, 200)
-	raw, _ := os.ReadFile("../../模板示例/Client.yaml")
+	raw, _ := os.ReadFile("../render/testdata/client.yaml")
 	c.do(http.MethodPost, "/api/templates", map[string]any{"name": "Client", "content": string(raw)}, nil, 201)
 	var p profileView
 	json.Unmarshal(c.do(http.MethodPost, "/api/profiles", map[string]any{"name": "P", "templateId": 1}, nil, 201), &p)
@@ -400,7 +400,7 @@ func TestProfileSourceSelection(t *testing.T) {
 		"text": "hy2://pw@hk.example.com:443?sni=hk.example.com#香港01\n" +
 			"hy2://pw@jp.example.com:443?sni=jp.example.com#东京02\n",
 	}, nil, 200)
-	raw, _ := os.ReadFile("../../模板示例/Client.yaml")
+	raw, _ := os.ReadFile("../render/testdata/client.yaml")
 	c.do(http.MethodPost, "/api/templates", map[string]any{"name": "Client", "content": string(raw)}, nil, 201)
 	c.do(http.MethodPost, "/api/profiles", map[string]any{"name": "P", "templateId": 1}, nil, 201)
 
@@ -467,7 +467,7 @@ func TestSubscriptionBundleZip(t *testing.T) {
 		"sourceId": 1, "commit": true,
 		"text": "hy2://pw@hk.example.com:443?sni=hk.example.com#香港01\n",
 	}, nil, 200)
-	raw, _ := os.ReadFile("../../模板示例/Client.yaml")
+	raw, _ := os.ReadFile("../render/testdata/client.yaml")
 	c.do(http.MethodPost, "/api/templates", map[string]any{"name": "Client", "content": string(raw)}, nil, 201)
 	var p struct {
 		Token string `json:"token"`

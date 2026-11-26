@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   Apple,
+  ArrowUpRight,
   Copy,
   Download,
   FileJson2,
@@ -26,6 +27,50 @@ const TARGETS = [
   { id: 'sing-box', label: 'sing-box', file: 'subs.json', icon: FileJson2, hint: 'SFA / SFI / sing-box 内核' },
   { id: 'loon', label: 'Loon', file: 'subs.conf', icon: FileText, hint: 'iOS Loon' },
 ] as const
+
+// 说明独占一行，避免客户端名称较长时挤压操作入口。
+function OutputRow({
+  icon: Icon,
+  label,
+  hint,
+  action,
+  href,
+  onClick,
+}: {
+  icon: React.ComponentType<{ size?: number | string; strokeWidth?: number; className?: string }>
+  label: string
+  hint: string
+  action: React.ReactNode
+  href?: string
+  onClick?: () => void
+}) {
+  const body = (
+    <>
+      <Icon size={14} strokeWidth={1.9} className="shrink-0 text-accent" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-body font-medium leading-snug text-fg-soft">{label}</span>
+        <span className="mt-0.5 block text-meta leading-snug text-fg-subtle">{hint}</span>
+      </span>
+      <span className="col-start-2 flex shrink-0 items-center gap-1 text-meta text-fg-subtle transition-colors group-hover:text-accent sm:col-auto">
+        {action}
+      </span>
+    </>
+  )
+  const cls =
+    'group grid min-h-11 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-1 rounded-lg border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-accent/50 hover:bg-raised focus-visible:border-accent/50 sm:flex'
+  if (href) {
+    return (
+      <a href={href} className={cls}>
+        {body}
+      </a>
+    )
+  }
+  return (
+    <button type="button" className={cls} onClick={onClick}>
+      {body}
+    </button>
+  )
+}
 
 function withParams(url: string, params: Record<string, string>): string {
   const sep = url.includes('?') ? '&' : '?'
@@ -134,15 +179,17 @@ export function SubscriptionOutput({
   const importLinks = [
     {
       label: 'Clash / Mihomo',
-      hint: 'Clash Verge Rev、FlClash',
+      hint: 'Clash Verge Rev、FlClash、ClashX Meta',
       href: `clash://install-config?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`,
       icon: Server,
+      action: '打开客户端',
     },
     {
       label: 'sing-box',
       hint: 'SFA / SFI',
       href: `sing-box://import-remote-profile?url=${encodeURIComponent(url)}#${encodeURIComponent(name)}`,
       icon: Plane,
+      action: '打开客户端',
     },
   ]
 
@@ -179,20 +226,33 @@ export function SubscriptionOutput({
           <SectionLabel>一键导入</SectionLabel>
           <div className="mt-2 grid gap-1.5">
             {importLinks.map((l) => (
-              <a
+              <OutputRow
                 key={l.label}
+                icon={l.icon}
+                label={l.label}
+                hint={l.hint}
                 href={l.href}
-                className="flex items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2 text-[0.7812rem] text-fg-soft transition-colors hover:border-accent/50 hover:bg-raised hover:text-fg"
-              >
-                <l.icon size={15} className="text-accent" />
-                <span className="font-medium">{l.label}</span>
-                <span className="meta ml-auto">{l.hint}</span>
-              </a>
+                action={
+                  <>
+                    {l.action}
+                    <ArrowUpRight size={13} />
+                  </>
+                }
+              />
             ))}
-            <div className="flex items-center gap-2.5 rounded-lg border border-dashed border-line px-3 py-2 text-[0.7188rem] text-fg-muted">
-              <Apple size={15} className="text-fg-subtle" />
-              <span>Loon：在应用内「订阅」粘贴上面的链接</span>
-            </div>
+            {/* Loon 使用应用内粘贴订阅地址的导入流程。 */}
+            <OutputRow
+              icon={Apple}
+              label="Loon"
+              hint="复制链接后在应用内「订阅」粘贴"
+              onClick={() => void copy(url, '订阅链接')}
+              action={
+                <>
+                  复制链接
+                  <Copy size={13} />
+                </>
+              }
+            />
           </div>
         </div>
 
@@ -208,10 +268,10 @@ export function SubscriptionOutput({
                 title={t.hint}
                 className="flex flex-col items-start gap-0.5 rounded-lg border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-accent/50 hover:bg-raised disabled:opacity-50"
               >
-                <span className="flex items-center gap-1.5 text-[0.75rem] font-medium text-fg-soft">
+                <span className="flex items-center gap-1.5 text-body font-medium text-fg-soft">
                   {busy === t.id ? <Spinner /> : <Download size={13} />} {t.label}
                 </span>
-                <span className="mono text-[0.6562rem] text-fg-subtle">{t.file}</span>
+                <span className="mono text-meta text-fg-subtle">{t.file}</span>
               </button>
             ))}
           </div>
@@ -221,10 +281,12 @@ export function SubscriptionOutput({
             disabled={busy !== ''}
             className="mt-1.5 flex w-full items-center gap-2.5 rounded-lg border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-accent/50 hover:bg-raised disabled:opacity-50"
           >
-            {busy === 'bundle' ? <Spinner /> : <FileArchive size={15} className="shrink-0 text-accent" />}
+            {busy === 'bundle' ? <Spinner /> : <FileArchive size={14} strokeWidth={1.9} className="shrink-0 text-accent" />}
             <span className="min-w-0 flex-1">
-              <span className="block text-[0.75rem] font-medium text-fg-soft">打包下载订阅文件</span>
-              <span className="meta block">三端配置 + README 打成一个 zip，换到够不到本机的设备上用</span>
+              <span className="block text-body font-medium leading-snug text-fg-soft">打包下载订阅文件</span>
+              <span className="mt-0.5 block text-meta leading-snug text-fg-subtle">
+                三端配置 + README 打成一个 zip，换到够不到本机的设备上用
+              </span>
             </span>
             <Download size={14} className="shrink-0 text-fg-subtle" />
           </button>

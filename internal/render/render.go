@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/wucai/subs/internal/protocol"
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
 )
 
 // Node is a resolved, render-ready node.

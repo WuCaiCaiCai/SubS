@@ -1,6 +1,6 @@
 package render
 
-import "github.com/wucai/subs/internal/protocol"
+import "github.com/WuCaiCaiCai/SubS/internal/protocol"
 
 // sampleConfig builds a representative config per protocol for dry-run validation.
 func sampleConfig(proto string) protocol.Config {

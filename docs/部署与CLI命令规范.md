@@ -3,8 +3,10 @@
 ## 1. 一条命令安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<user>/subs/main/install.sh | bash
+curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.sh | sudo bash
 ```
+
+当前仓库尚无已验证的正式 Release；发布流程必须将 `install.sh` 与二进制压缩包、`checksums.txt` 一起上传。完成首次 Release 验证前，README 命令属于预定入口，不应宣称已可用。
 
 安装器行为（每步打印到 stdout，失败即停并说明回滚）：
 
@@ -14,8 +16,8 @@ curl -fsSL https://raw.githubusercontent.com/<user>/subs/main/install.sh | bash
 4. 创建系统用户 `subs`（无登录 shell）
 5. 建数据目录 `/var/lib/subs/`（owner subs，0700）
 6. 写 systemd unit（`/etc/systemd/system/subs.service`），`Restart=on-failure`，`ProtectSystem=strict` + `ReadWritePaths=/var/lib/subs`
-7. 交互询问监听 host/port（默认 127.0.0.1:8787），写初版设置
-8. 启动服务，生成一次性初始化密钥（打印 + 写 journal，24h 后失效）
+7. 默认监听 `127.0.0.1:8787`；需更改时由运维人员调整 systemd unit 的 `--listen` 参数
+8. 启动服务，生成一次性初始化密钥，仅输出到安装终端并保存在权限为 0600 的数据目录文件中（24h 后失效）
 9. 输出访问地址、防火墙提示、HTTPS 反代建议
 
 升级：重跑安装命令 → 备份数据库快照到 `/var/lib/subs/pre-upgrade-<ts>.db` → 替换二进制（旧的保留为 `/usr/local/bin/subs.old`）→ 重启；失败可手动回滚二进制。
@@ -26,7 +28,6 @@ curl -fsSL https://raw.githubusercontent.com/<user>/subs/main/install.sh | bash
 | 命令 | 作用 |
 |---|---|
 | `subs reset-password` | 交互重置管理员密码，使所有会话失效 |
-| `subs listen <host> <port>` | 改监听并重启 |
 | `subs backup -o file [-p pass]` | 无网页时的本地备份 |
 | `subs restore file [-p pass]` | 本地恢复（恢复前自动快照当前库） |
 | `subs uninstall [--purge]` | 停服务、删 unit 与二进制；`--purge` 同时删数据目录与系统用户 |

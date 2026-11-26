@@ -183,14 +183,6 @@ export function DashboardPage({ onNavigate }: { onNavigate: (path: string) => vo
               </div>
               <dl className="mt-3 space-y-2 text-[0.75rem]">
                 <Row label="实例名" value={<code>{s?.instanceName || 'my-subs'}</code>} />
-                <Row
-                  label="监听"
-                  value={
-                    <code>
-                      {s?.listenHost || '127.0.0.1'}:{s?.listenPort ?? 8787}
-                    </code>
-                  }
-                />
                 <Row label="数据库" value={<code>{formatBytes(s?.diskUsedBytes ?? 0)}</code>} />
                 <Row
                   label="节点总数"

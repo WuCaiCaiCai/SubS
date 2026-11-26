@@ -13,7 +13,7 @@ type Issue struct {
 	Message string `json:"message"`
 }
 
-// ValidateTemplate runs the checks from 模板占位符与命名规则规范.md §3.
+// ValidateTemplate runs the checks from docs/模板占位符与命名规则规范.md §3.
 func ValidateTemplate(content string) ([]Issue, error) {
 	var issues []Issue
 	if strings.TrimSpace(content) == "" {

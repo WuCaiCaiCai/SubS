@@ -34,7 +34,7 @@ func TestWriteTransactionRollsBack(t *testing.T) {
 	defer s.Close()
 	wantErr := context.Canceled
 	err = s.Write(context.Background(), func(tx *sql.Tx) error {
-		_, e := tx.Exec("INSERT INTO instance(id,name,listen_host,listen_port,version,key_salt) VALUES(1,'x','127.0.0.1',8787,'test',randomblob(16))")
+		_, e := tx.Exec("INSERT INTO instance(id,name,version,key_salt) VALUES(1,'x','test',randomblob(16))")
 		if e != nil {
 			return e
 		}

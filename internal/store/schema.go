@@ -4,7 +4,6 @@ const schema = `
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS instance (
  id INTEGER PRIMARY KEY CHECK(id=1), name TEXT NOT NULL DEFAULT 'my-subs',
- listen_host TEXT NOT NULL DEFAULT '127.0.0.1', listen_port INTEGER NOT NULL DEFAULT 8787,
  external_url TEXT, version TEXT NOT NULL DEFAULT 'dev', key_salt BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS admin (

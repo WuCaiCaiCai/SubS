@@ -2,6 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { highlight, type Lang } from '../lib/highlight'
 
+// 行号列、着色层、输入层必须用同一套字体尺寸与行高，否则行号会随行数累积偏移。
+const CODE_TYPE = 'mono text-[0.7188rem] leading-[1.7]'
+
 /**
  * 纯前端代码编辑器：透明 textarea 叠在着色层上，行号列独立同步滚动，
  * 支持 Tab 缩进与全屏。模板内容敏感（可能含密码），所以不引第三方编辑器依赖。
@@ -28,6 +31,9 @@ export function CodeEditor({
   const gutterRef = useRef<HTMLDivElement | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const [caret, setCaret] = useState({ line: 1, col: 1 })
+  // textarea 出现竖向滚动条时可用宽度会变窄，着色层必须跟着变窄，
+  // 否则长行（base64/长 URL）右端会与输入层错位。
+  const [contentWidth, setContentWidth] = useState<number | null>(null)
 
   const html = useMemo(() => highlight(value, language), [value, language])
   const lineCount = useMemo(() => value.split('\n').length, [value])
@@ -53,7 +59,18 @@ export function CodeEditor({
   // 内容变化后保持滚动位置，并把光标行号同步出来。
   useLayoutEffect(() => {
     syncScroll()
+    if (taRef.current) setContentWidth(taRef.current.clientWidth)
   }, [html, syncScroll])
+
+  useEffect(() => {
+    const ta = taRef.current
+    if (!ta) return
+    const measure = () => setContentWidth(ta.clientWidth)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(ta)
+    return () => ro.disconnect()
+  }, [fullscreen])
 
   useEffect(() => {
     if (!fullscreen) return
@@ -70,7 +87,7 @@ export function CodeEditor({
   }, [fullscreen])
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Tab') {
+    if (!readOnly && e.key === 'Tab') {
       e.preventDefault()
       const ta = e.currentTarget
       const start = ta.selectionStart
@@ -91,11 +108,14 @@ export function CodeEditor({
 
   return (
     <div
+      // 高度必须落在最外层：内部的 pre/textarea 都是 absolute，不参与撑高，
+      // 只给 textarea 写 height 会让行号列与外框塌陷成 0。
       className={`flex flex-col overflow-hidden border border-line bg-canvas ${
         fullscreen ? 'fixed inset-0 z-[70] h-dvh w-screen rounded-none' : 'rounded-xl'
       }`}
+      style={fullscreen ? undefined : { height }}
     >
-      <div className="flex items-center gap-2 border-b border-line bg-surface px-3 py-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-3 py-1.5">
         <span className="mono text-[0.6875rem] uppercase tracking-[0.12em] text-fg-subtle">
           {language === 'yaml' ? 'YAML' : language === 'json' ? 'JSON' : 'CONF'}
         </span>
@@ -118,7 +138,7 @@ export function CodeEditor({
         <div
           ref={gutterRef}
           aria-hidden
-          className="mono w-11 shrink-0 overflow-hidden border-r border-line bg-surface/40 py-3 pr-2 text-right text-[0.7188rem] leading-[1.7] text-fg-subtle select-none"
+          className={`${CODE_TYPE} w-11 shrink-0 overflow-hidden border-r border-line bg-surface/40 py-3 pr-2 text-right text-fg-subtle select-none`}
         >
           {lineNumbers.map((n) => (
             <div key={n}>{n}</div>
@@ -129,9 +149,10 @@ export function CodeEditor({
           <pre
             ref={preRef}
             aria-hidden
-            className="mono pointer-events-none absolute inset-0 m-0 overflow-hidden px-3 py-3 text-[0.7188rem] leading-[1.7] whitespace-pre text-fg-soft"
+            style={contentWidth ? { width: contentWidth } : undefined}
+            className={`${CODE_TYPE} pointer-events-none absolute inset-y-0 left-0 m-0 overflow-hidden px-3 py-3 whitespace-pre text-fg-soft`}
           >
-            <code dangerouslySetInnerHTML={{ __html: html }} />
+            <code style={{ fontSize: 'inherit', lineHeight: 'inherit' }} dangerouslySetInnerHTML={{ __html: html }} />
           </pre>
           <textarea
             ref={taRef}
@@ -150,10 +171,9 @@ export function CodeEditor({
             autoCorrect="off"
             wrap="off"
             aria-label={ariaLabel}
-            className={`mono absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent px-3 py-3 text-[0.7188rem] leading-[1.7] whitespace-pre text-transparent caret-accent outline-none selection:bg-accent/25 ${
-              readOnly ? 'cursor-text' : ''
+            className={`${CODE_TYPE} absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent px-3 py-3 whitespace-pre text-transparent outline-none selection:bg-accent/25 ${
+              readOnly ? 'cursor-default caret-transparent' : 'caret-accent'
             }`}
-            style={fullscreen ? undefined : { height }}
           />
         </div>
       </div>

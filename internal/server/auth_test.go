@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wucai/subs/internal/store"
+	"github.com/WuCaiCaiCai/SubS/internal/store"
 )
 
 func testServer(t *testing.T) (*Server, http.Handler) {

@@ -1,0 +1,21 @@
+# 精简测试模板：保留真实模板的注入结构（proxies 键 + include-all 策略组）
+port: 7890
+mode: rule
+log-level: warning
+
+proxies: ~
+
+proxy-groups:
+  - name: All
+    type: select
+    include-all: true
+    proxies:
+      - DIRECT
+  - name: Stable
+    type: select
+    proxies:
+      - All
+      - DIRECT
+
+rules:
+  - MATCH,All

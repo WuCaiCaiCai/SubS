@@ -1,0 +1,20 @@
+# 精简测试模板：路由版结构
+port: 7891
+mode: rule
+
+proxies: []
+
+proxy-groups:
+  - name: All
+    type: select
+    include-all: true
+    proxies:
+      - DIRECT
+  - name: BulkDownload
+    type: select
+    proxies:
+      - All
+      - DIRECT
+
+rules:
+  - MATCH,BulkDownload

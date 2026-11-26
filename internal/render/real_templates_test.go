@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wucai/subs/internal/protocol"
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
 )
 
 func TestRealTemplates(t *testing.T) {
@@ -20,7 +20,7 @@ func TestRealTemplates(t *testing.T) {
 			Transport: map[string]any{"sni": "us1.example.com", "alpn": "h3", "insecure": true},
 			Extra:     map[string]any{"congestionControl": "bbr"}}},
 	}
-	for _, f := range []string{"../../模板示例/Client.yaml", "../../模板示例/Router.yaml"} {
+	for _, f := range []string{"testdata/client.yaml", "testdata/router.yaml"} {
 		raw, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)

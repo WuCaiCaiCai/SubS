@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wucai/subs/internal/airport"
-	"github.com/wucai/subs/internal/profile"
-	"github.com/wucai/subs/internal/protocol"
-	"github.com/wucai/subs/internal/secrets"
+	"github.com/WuCaiCaiCai/SubS/internal/airport"
+	"github.com/WuCaiCaiCai/SubS/internal/profile"
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
+	"github.com/WuCaiCaiCai/SubS/internal/secrets"
 )
 
 type airportView struct {

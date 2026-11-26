@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/wucai/subs/internal/render"
+	"github.com/WuCaiCaiCai/SubS/internal/render"
 )
 
 type templateView struct {

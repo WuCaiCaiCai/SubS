@@ -11,8 +11,6 @@
 CREATE TABLE instance (
   id              INTEGER PRIMARY KEY CHECK (id = 1),
   name            TEXT NOT NULL DEFAULT 'my-subs', -- 实例名，销毁确认短语用
-  listen_host     TEXT NOT NULL DEFAULT '127.0.0.1',
-  listen_port     INTEGER NOT NULL DEFAULT 8787,
   external_url    TEXT,              -- 可选，生成订阅链接用
   version         TEXT NOT NULL,
   key_salt        BLOB NOT NULL      -- 应用密钥派生盐
@@ -183,8 +181,7 @@ POST /api/backup           {password} → {downloadId, sha256}（短时一次性
 GET  /api/backup/:downloadId  文件流（no-store）
 POST /api/restore          multipart 备份包 + password（校验后进入向导）
 POST /api/destroy          {confirmPhrase, backupSha256?}  必须 confirmPhrase=实例名，若未提供已下载备份的 sha256 则拒绝（除非 dryRun）
-GET  /api/system           → 版本、监听、磁盘、机场/节点统计
-PUT  /api/system/listen    {host, port}
+GET  /api/system           → 版本、磁盘、机场/节点统计
 ```
 
 ### 订阅分发（无管理认证）

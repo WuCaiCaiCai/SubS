@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wucai/subs/internal/protocol"
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
 )
 
 // ErrBlockedURL is returned when a subscription URL targets a private network.

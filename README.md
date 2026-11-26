@@ -17,10 +17,10 @@ SubS 只做三件事：**收进来、理清楚、发出去**。
 ### 部署到 VPS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/wucai/subs/main/install.sh | sudo bash
+curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.sh | sudo bash
 ```
 
-安装器会下载对应架构的二进制、校验 sha256、建 `subs` 系统用户、装 systemd 服务、生成一次性初始化密钥并做健康检查。默认只监听 `127.0.0.1:8787`，需要自己用 Nginx/Caddy 反代上 HTTPS。
+推送 `v*` tag 后，GitHub Actions 会运行测试、构建 Linux x64 二进制并发布 Release，同时上传安装脚本与 SHA-256 校验文件。默认只监听 `127.0.0.1:8787`，建议通过 Nginx/Caddy 反代并启用 HTTPS。首次 Release 发布前，此安装命令尚不可用。
 
 ### 本地跑起来
 
@@ -74,7 +74,7 @@ mieru://username:password@host:port?transport=TCP&multiplexing=MULTIPLEXING_LOW&
 ./subs backup      -o b.sbox -p '密码'        # 网页不可用时的本地备份
 ./subs restore     b.sbox -p '密码'           # 恢复前自动快照当前库
 ./subs reset-password --data-dir ./data       # 重置密码并使全部会话失效
-./subs listen 0.0.0.0 8787                    # 改监听（需同步 systemd unit）
+# 修改监听请编辑 systemd unit 中的 `--listen` 参数后重启服务
 ./subs uninstall   [--purge]                  # 卸载（--purge 连数据一起删）
 ```
 
@@ -109,4 +109,8 @@ internal/secrets/  加密与口令
 web/               React + Tailwind 前端
 ```
 
-设计文档见仓库根目录的 `设计说明.md`、`数据模型与API规范.md`、`协议解析与配置生成规范.md` 等。
+设计文档见 `docs/` 目录：`docs/设计说明.md`、`docs/数据模型与API规范.md`、`docs/协议解析与配置生成规范.md` 等。
+
+## 开源协议
+
+[MIT](LICENSE)

@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/wucai/subs/internal/secrets"
-	"github.com/wucai/subs/internal/server"
-	"github.com/wucai/subs/internal/store"
+	"github.com/WuCaiCaiCai/SubS/internal/secrets"
+	"github.com/WuCaiCaiCai/SubS/internal/server"
+	"github.com/WuCaiCaiCai/SubS/internal/store"
 )
 
 // version is stamped at build time: -ldflags "-X main.version=v1.2.3".
@@ -23,7 +23,6 @@ const usage = `subs — 私有订阅管理与分发工具
 用法:
   subs [serve] [--data-dir DIR] [--listen HOST:PORT] [--init-token TOKEN]
   subs reset-password [--data-dir DIR] [--password PASS]
-  subs listen <host> <port> [--data-dir DIR]
   subs backup -o FILE [--data-dir DIR] [-p PASS]
   subs restore FILE [--data-dir DIR] [-p PASS]
   subs status [--data-dir DIR]
@@ -32,7 +31,6 @@ const usage = `subs — 私有订阅管理与分发工具
 
 子命令说明:
   reset-password  重置管理员密码并使全部会话失效
-  listen          修改实例记录的监听地址（需同步修改 systemd unit）
   backup          在无网页时导出 .sbox 加密备份
   restore         从 .sbox 备份恢复（恢复前自动留存当前库快照）
   status          查看实例与数据统计
@@ -53,8 +51,6 @@ func main() {
 		err = runServe(args)
 	case "reset-password":
 		err = cmdResetPassword(args)
-	case "listen":
-		err = cmdListen(args)
 	case "backup":
 		err = cmdBackup(args)
 	case "restore":

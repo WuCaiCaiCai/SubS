@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/wucai/subs/internal/profile"
-	"github.com/wucai/subs/internal/protocol"
-	"github.com/wucai/subs/internal/render"
+	"github.com/WuCaiCaiCai/SubS/internal/profile"
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
+	"github.com/WuCaiCaiCai/SubS/internal/render"
 )
 
 type profileView struct {

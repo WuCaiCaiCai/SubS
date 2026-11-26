@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/wucai/subs/internal/protocol"
+	"github.com/WuCaiCaiCai/SubS/internal/protocol"
 )
 
 func testNodes() []Node {

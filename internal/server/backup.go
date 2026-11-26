@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/wucai/subs/internal/backup"
-	"github.com/wucai/subs/internal/store"
+	"github.com/WuCaiCaiCai/SubS/internal/backup"
+	"github.com/WuCaiCaiCai/SubS/internal/store"
 )
 
 // backupTTL bounds how long a generated backup stays downloadable.
@@ -61,7 +61,7 @@ func (b *backupStore) drop(id string) {
 }
 
 // createBackup snapshots the database into an age-encrypted .sbox archive.
-// The archive layout follows 技术架构与选型.md: metadata.json + db.sqlite.
+// The archive layout follows docs/技术架构与选型.md: metadata.json + db.sqlite.
 func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Password string `json:"password"`

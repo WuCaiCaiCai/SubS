@@ -6,7 +6,7 @@ import (
 )
 
 func TestValidateRealTemplates(t *testing.T) {
-	for _, f := range []string{"../../模板示例/Client.yaml", "../../模板示例/Router.yaml"} {
+	for _, f := range []string{"testdata/client.yaml", "testdata/router.yaml"} {
 		raw, err := os.ReadFile(f)
 		if err != nil {
 			t.Fatal(err)

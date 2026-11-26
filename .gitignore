@@ -1,19 +1,25 @@
-# 构建产物
+# Build outputs
 /subs
+/out/
 /dist/
 web/dist/*
 !web/dist/.gitkeep
 web/node_modules/
 web/*.tsbuildinfo
 
-# 运行时数据
+# Local runtime data and secrets
 /data/
+/data-*/
 *.db
-*.db-wal
-*.db-shm
+*.db-*
 *.sbox
 master.key
+init-token
+.env
+.env.*
+!.env.example
 
-# 工具缓存
+# Tool and OS caches
 .playwright-mcp/
 .DS_Store
+Thumbs.db
