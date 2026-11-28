@@ -71,14 +71,46 @@ step "校验 sha256"
   || die "校验失败，安装包可能被篡改"
 tar -xzf "$WORK/$ASSET" -C "$WORK"
 
-DATA_DIR="$(ask "数据目录 [${DATA_DIR}]: " "$DATA_DIR")"
+DATA_DIR_EXPLICIT="${SUBS_DATA_DIR:-}"
+LISTEN_EXPLICIT="${SUBS_LISTEN:-}"
+BIND_EXPLICIT="${SUBS_BIND:-}"
+PORT_EXPLICIT="${SUBS_PORT:-}"
 
-# 监听地址与端口分开问：地址决定是谁能连，端口常需要避开已占用/被扫的端口。
-LISTEN_ADDR="${SUBS_BIND:-0.0.0.0}"
-LISTEN_PORT="${SUBS_PORT:-8787}"
-if [[ -n "${SUBS_LISTEN:-}" ]]; then
-  LISTEN_ADDR="${SUBS_LISTEN%:*}"
-  LISTEN_PORT="${SUBS_LISTEN##*:}"
+PREV_DATA_DIR=""
+PREV_LISTEN=""
+IS_UPGRADE=0
+if [[ -f "$UNIT_PATH" ]]; then
+  IS_UPGRADE=1
+  EXEC_LINE="$(sed -n 's/^ExecStart=//p' "$UNIT_PATH" | head -1)"
+  if [[ "$EXEC_LINE" =~ --data-dir[[:space:]]+([^[:space:]]+) ]]; then
+    PREV_DATA_DIR="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$EXEC_LINE" =~ --listen[[:space:]]+([^[:space:]]+) ]]; then
+    PREV_LISTEN="${BASH_REMATCH[1]}"
+  fi
+elif [[ -f "$BIN_PATH" ]]; then
+  IS_UPGRADE=1
+fi
+
+DEFAULT_DATA_DIR="${DATA_DIR_EXPLICIT:-${PREV_DATA_DIR:-/var/lib/subs}}"
+if [[ "$IS_UPGRADE" == "1" && ( -n "$PREV_DATA_DIR" || -n "$PREV_LISTEN" ) ]]; then
+  step "检测到已有安装，自动继承原配置（数据目录 ${DEFAULT_DATA_DIR}，监听 ${PREV_LISTEN:-0.0.0.0:8787}）"
+fi
+
+DATA_DIR="$(ask "数据目录 [${DEFAULT_DATA_DIR}]: " "$DEFAULT_DATA_DIR")"
+
+# 监听地址与端口分开问：优先继承上次 systemd unit 的配置，其次读取环境变量。
+LISTEN_ADDR="0.0.0.0"
+LISTEN_PORT="8787"
+if [[ -n "$PREV_LISTEN" ]]; then
+  LISTEN_ADDR="${PREV_LISTEN%:*}"
+  LISTEN_PORT="${PREV_LISTEN##*:}"
+fi
+if [[ -n "$BIND_EXPLICIT" ]]; then LISTEN_ADDR="$BIND_EXPLICIT"; fi
+if [[ -n "$PORT_EXPLICIT" ]]; then LISTEN_PORT="$PORT_EXPLICIT"; fi
+if [[ -n "$LISTEN_EXPLICIT" ]]; then
+  LISTEN_ADDR="${LISTEN_EXPLICIT%:*}"
+  LISTEN_PORT="${LISTEN_EXPLICIT##*:}"
 fi
 LISTEN_ADDR="$(ask "监听地址（0.0.0.0 对外直连 / 127.0.0.1 仅本机 + 反代）[${LISTEN_ADDR}]: " "$LISTEN_ADDR")"
 LISTEN_PORT="$(ask "监听端口 [${LISTEN_PORT}]: " "$LISTEN_PORT")"
