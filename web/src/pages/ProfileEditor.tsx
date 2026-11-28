@@ -605,6 +605,7 @@ function NodeOrderStep({
   }))
   const [savingRule, setSavingRule] = useState(false)
   const [renamingId, setRenamingId] = useState<number | null>(null)
+  const [draggingGroups, setDraggingGroups] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -805,7 +806,16 @@ function NodeOrderStep({
             <p className="text-[0.6875rem] text-fg-subtle">
               可拖动来源卡片调整机场/VPS 顺序，或在卡片内拖动/长按节点调整组内顺序（松手自动保存）。
             </p>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={() => setDraggingGroups(true)}
+              onDragCancel={() => setDraggingGroups(false)}
+              onDragEnd={(e) => {
+                setDraggingGroups(false)
+                handleGroupDragEnd(e)
+              }}
+            >
               <SortableContext items={orderGroups.map((g) => g.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {orderGroups.map((group, groupIdx) => (
@@ -813,6 +823,7 @@ function NodeOrderStep({
                       key={group.id}
                       group={group}
                       sensors={sensors}
+                      forceCollapsed={draggingGroups}
                       canMoveUp={groupIdx > 0}
                       canMoveDown={groupIdx < orderGroups.length - 1}
                       renamingId={renamingId}
@@ -1011,6 +1022,7 @@ function NodeOrderStep({
 function SortableGroupCard({
   group,
   sensors,
+  forceCollapsed,
   canMoveUp,
   canMoveDown,
   renamingId,
@@ -1033,6 +1045,7 @@ function SortableGroupCard({
     nodes: (ProfileNode & { seq: number })[]
   }
   sensors: ReturnType<typeof useSensors>
+  forceCollapsed: boolean
   canMoveUp: boolean
   canMoveDown: boolean
   renamingId: number | null
@@ -1049,6 +1062,7 @@ function SortableGroupCard({
     id: group.id,
   })
   const [expanded, setExpanded] = useState(true)
+  const showNodes = expanded && !forceCollapsed
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -1089,7 +1103,7 @@ function SortableGroupCard({
           onClick={() => setExpanded((v) => !v)}
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          {expanded ? (
+          {showNodes ? (
             <ChevronDown size={13} className="shrink-0 text-fg-subtle" />
           ) : (
             <ChevronRight size={13} className="shrink-0 text-fg-subtle" />
@@ -1128,7 +1142,7 @@ function SortableGroupCard({
         </div>
       </div>
 
-      {expanded && (
+      {showNodes && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleNodeDragEnd}>
           <SortableContext items={group.nodes.map((n) => `n:${n.nodeId}`)} strategy={verticalListSortingStrategy}>
             <ul className="divide-y divide-line/60 border-t border-line/70">
