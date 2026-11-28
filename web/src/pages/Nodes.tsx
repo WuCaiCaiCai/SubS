@@ -33,6 +33,7 @@ import {
   SectionLabel,
   SkeletonRows,
   Spinner,
+  Switch,
 } from '../components/ui'
 
 interface Filters {
@@ -435,24 +436,11 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={node.enabled}
-                        aria-label={node.enabled ? '停用节点' : '启用节点'}
-                        onClick={() => toggleNode(node, !node.enabled)}
-                        className={`relative h-5 w-9 rounded-full border transition-colors ${
-                          node.enabled
-                            ? 'border-accent/40 bg-accent/25'
-                            : 'border-line-strong bg-raised'
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-fg transition-all ${
-                            node.enabled ? 'left-[18px]' : 'left-0.5'
-                          }`}
-                        />
-                      </button>
+                      <Switch
+                        checked={node.enabled}
+                        onChange={(next) => toggleNode(node, next)}
+                        label={node.enabled ? '停用节点' : '启用节点'}
+                      />
                       {node.missing && (
                         <button
                           type="button"
