@@ -142,7 +142,7 @@ export function SettingsPage({ onNavigate }: { onNavigate: (path: string) => voi
           忘记密码或需要清空登录会话时，在服务器上直接执行：
         </p>
         <pre className="mono mt-2 overflow-x-auto rounded border border-line bg-canvas p-2.5 text-[0.7188rem] text-fg-soft">
-          {`subs reset-password --data-dir /var/lib/subs\nsubs backup --data-dir /var/lib/subs --out ./backup.sbox`}
+          {`subs reset-password --data-dir /var/lib/subs\nsubs backup -o ./backup.sbox --data-dir /var/lib/subs`}
         </pre>
       </section>
 

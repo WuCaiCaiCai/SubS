@@ -257,11 +257,23 @@ func (s *Server) destroy(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "confirm_mismatch", "确认短语与实例名不一致")
 		return
 	}
+	sha := strings.TrimSpace(in.BackupSHA256)
 	if in.DryRun {
+		if sha != "" {
+			var downloaded sql.NullString
+			if err := s.Store.DB().QueryRowContext(r.Context(),
+				"SELECT downloaded_at FROM backup_record WHERE sha256=?", sha).Scan(&downloaded); err != nil {
+				fail(w, 409, "backup_not_found", "未找到匹配的备份下载记录")
+				return
+			}
+			if !downloaded.Valid {
+				fail(w, 409, "backup_not_downloaded", "该备份尚未下载，请先下载")
+				return
+			}
+		}
 		writeJSON(w, 200, map[string]any{"ok": true, "dryRun": true})
 		return
 	}
-	sha := strings.TrimSpace(in.BackupSHA256)
 	if sha == "" {
 		fail(w, 409, "backup_required", "请先下载备份并提交其 sha256 校验值")
 		return
@@ -298,15 +310,23 @@ func (s *Server) replaceDatabase(r *http.Request, newPath string) error {
 	return s.Store.ReplaceWith(r.Context(), newPath, s.DBPath)
 }
 
-// wipe removes all data for the instance, leaving a final backup behind.
+// wipe removes all data for the instance, leaving a final backup behind,
+// and resets the store to a clean empty database.
 func (s *Server) wipe(r *http.Request) error {
 	if err := s.finalBackup(r); err != nil {
 		return err
 	}
+	s.Backups = backupStore{}
+	_ = os.RemoveAll(filepath.Join(s.DataDir, "backups"))
+	_ = os.Remove(filepath.Join(s.DataDir, "master.key"))
+	s.Box = nil
+	if s.DBPath != "" {
+		return s.Store.Reset(s.DBPath)
+	}
 	if err := s.Store.DB().Close(); err != nil {
 		return err
 	}
-	for _, name := range []string{"subs.db", "subs.db-wal", "subs.db-shm", "master.key"} {
+	for _, name := range []string{"subs.db", "subs.db-wal", "subs.db-shm"} {
 		_ = os.Remove(filepath.Join(s.DataDir, name))
 	}
 	return nil

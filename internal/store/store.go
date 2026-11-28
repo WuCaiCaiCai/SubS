@@ -94,6 +94,27 @@ func (s *Store) ReplaceWith(ctx context.Context, newPath, dbPath string) error {
 	return nil
 }
 
+// Reset closes the current database, removes its files, and opens a fresh empty
+// database at dbPath so a running server can cleanly return to uninitialized state.
+func (s *Store) Reset(dbPath string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.backupMu.Lock()
+	defer s.backupMu.Unlock()
+	if err := s.db.Close(); err != nil {
+		return err
+	}
+	for _, path := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		_ = os.Remove(path)
+	}
+	reopened, err := Open(dbPath)
+	if err != nil {
+		return err
+	}
+	s.db = reopened.db
+	return nil
+}
+
 // migrate moves data written by older versions into the current shape. Every
 // step must be idempotent: it runs on each start.
 func migrateListenColumns(db *sql.DB) error {
@@ -242,6 +263,16 @@ func migrate(db *sql.DB) error {
 	}
 	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_slug ON profile(slug) WHERE slug<>''`); err != nil {
 		return fmt.Errorf("profile slug index: %w", err)
+	}
+	// 自动丢弃旧版本遗留的缺失节点与待确认标记，无需人工确认。
+	if _, err := db.Exec(`DELETE FROM profile_item WHERE kind='node' AND ref_id IN (SELECT id FROM node WHERE missing=1)`); err != nil {
+		return fmt.Errorf("cleanup missing profile items: %w", err)
+	}
+	if _, err := db.Exec(`DELETE FROM node WHERE missing=1`); err != nil {
+		return fmt.Errorf("cleanup missing nodes: %w", err)
+	}
+	if _, err := db.Exec(`UPDATE node SET is_new=0 WHERE is_new=1`); err != nil {
+		return fmt.Errorf("clear is_new flags: %w", err)
 	}
 	return nil
 }

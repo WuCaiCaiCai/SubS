@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Check, DatabaseBackup, Download, FileArchive, ShieldAlert, Upload } from 'lucide-react'
-import { api, ApiError, type BackupResult } from '../lib/api'
+import { api, ApiError, getCsrfToken, type BackupResult } from '../lib/api'
 import { formatBytes, relativeTime, toast, useAsync } from '../lib/hooks'
 import { Badge, CopyButton, ErrorNote, SectionLabel, SkeletonRows, Spinner } from '../components/ui'
 
@@ -74,8 +74,8 @@ export function BackupPage() {
       form.append('password', restorePassword)
       const res = await fetch('/api/restore', { method: 'POST', body: form, credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf() } })
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new ApiError(res.status, body.code ?? 'restore_failed', body.message ?? '恢复失败')
+        const body = (await res.json().catch(() => ({}))) as { error?: { code?: string; message?: string } }
+        throw new ApiError(res.status, body.error?.code ?? 'restore_failed', body.error?.message ?? '恢复失败')
       }
       toast('success', '恢复完成，正在重新登录…')
       window.setTimeout(() => {
@@ -225,7 +225,7 @@ export function BackupPage() {
         <SectionLabel>命令行备份</SectionLabel>
         <p className="mt-1 text-[0.75rem] text-fg-muted">在服务器上无需登录即可导出/恢复：</p>
         <pre className="mono mt-2 overflow-x-auto rounded border border-line bg-canvas p-2.5 text-[0.7188rem] leading-relaxed text-fg-soft">
-          {`subs backup  --data-dir /var/lib/subs --out ./backup.sbox\nsubs restore --data-dir /var/lib/subs --in ./backup.sbox`}
+          {`subs backup  -o ./backup.sbox --data-dir /var/lib/subs\nsubs restore ./backup.sbox --data-dir /var/lib/subs`}
         </pre>
       </section>
     </div>
@@ -233,6 +233,8 @@ export function BackupPage() {
 }
 
 function csrf(): string {
+  const token = getCsrfToken()
+  if (token) return token
   const m = document.cookie.match(/(?:^|;\s*)subs_csrf=([^;]+)/)
   return m ? decodeURIComponent(m[1]) : ''
 }

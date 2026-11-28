@@ -63,6 +63,13 @@ type apiError struct {
 }
 
 func (s *Server) box() (*secrets.Box, error) {
+	if s.Box == nil && s.DataDir != "" {
+		b, err := secrets.LoadOrCreateBox(s.DataDir)
+		if err != nil {
+			return nil, err
+		}
+		s.Box = b
+	}
 	if s.Box == nil {
 		return nil, errors.New("加密密钥未初始化")
 	}
@@ -488,23 +495,27 @@ func (s *Server) system(w http.ResponseWriter, r *http.Request) {
 	if info, e := os.Stat(s.DBPath); e == nil {
 		diskUsed = info.Size()
 	}
+	var latestBackupSha string
+	_ = s.Store.DB().QueryRowContext(r.Context(),
+		"SELECT sha256 FROM backup_record WHERE downloaded_at IS NOT NULL ORDER BY downloaded_at DESC LIMIT 1").Scan(&latestBackupSha)
 	appVersion := s.Version
 	if appVersion == "" {
 		appVersion = dbVersion
 	}
 	writeJSON(w, 200, map[string]any{
-		"instanceName":  name,
-		"version":       appVersion,
-		"externalUrl":   external.String,
-		"httpsOnly":     httpsOnly != 0,
-		"diskUsedBytes": diskUsed,
-		"airports":      count("SELECT count(*) FROM airport"),
-		"servers":       count("SELECT count(*) FROM server"),
-		"nodes":         count("SELECT count(*) FROM node"),
-		"newNodes":      count("SELECT count(*) FROM node WHERE is_new=1"),
-		"missingNodes":  count("SELECT count(*) FROM node WHERE missing=1"),
-		"profiles":      count("SELECT count(*) FROM profile"),
-		"lastBackupAt":  lastBackup,
+		"instanceName":    name,
+		"version":         appVersion,
+		"externalUrl":     external.String,
+		"httpsOnly":       httpsOnly != 0,
+		"diskUsedBytes":   diskUsed,
+		"airports":        count("SELECT count(*) FROM airport"),
+		"servers":         count("SELECT count(*) FROM server"),
+		"nodes":           count("SELECT count(*) FROM node"),
+		"newNodes":        count("SELECT count(*) FROM node WHERE is_new=1"),
+		"missingNodes":    count("SELECT count(*) FROM node WHERE missing=1"),
+		"profiles":        count("SELECT count(*) FROM profile"),
+		"lastBackupAt":    lastBackup,
+		"latestBackupSha": latestBackupSha,
 	})
 }
 func (s *Server) updateSystem(w http.ResponseWriter, r *http.Request) {

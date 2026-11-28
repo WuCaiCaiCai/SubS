@@ -5,7 +5,7 @@ import { toast, useAsync } from '../lib/hooks'
 import { ErrorNote, SectionLabel, SkeletonRows, Spinner } from '../components/ui'
 
 export function DestroyPage({ onNavigate }: { onNavigate: (path: string) => void }) {
-  const system = useAsync(() => api.get<SystemInfo>('/api/system'))
+  const system = useAsync(() => api.get<SystemInfo & { latestBackupSha?: string }>('/api/system'))
   const [phrase, setPhrase] = useState('')
   const [sha, setSha] = useState('')
   const [ack, setAck] = useState(false)
@@ -14,6 +14,7 @@ export function DestroyPage({ onNavigate }: { onNavigate: (path: string) => void
   const [stage, setStage] = useState<'idle' | 'final'>('idle')
 
   const instanceName = system.data?.instanceName ?? ''
+  const latestSha = system.data?.latestBackupSha ?? ''
 
   const run = async (dryRun: boolean) => {
     setError('')
@@ -111,7 +112,26 @@ export function DestroyPage({ onNavigate }: { onNavigate: (path: string) => void
         </label>
 
         <label className="block space-y-1.5">
-          <span className="text-[0.75rem] font-medium text-fg-soft">已下载备份的 SHA-256</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[0.75rem] font-medium text-fg-soft">已下载备份的 SHA-256</span>
+            {latestSha ? (
+              <button
+                type="button"
+                onClick={() => setSha(latestSha)}
+                className="text-[0.6875rem] text-accent hover:underline"
+              >
+                填入最近已下载备份
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onNavigate('/backup')}
+                className="text-[0.6875rem] text-warning hover:underline"
+              >
+                去备份页创建并下载 →
+              </button>
+            )}
+          </div>
           <input
             className="input mono text-[0.7188rem]"
             value={sha}
