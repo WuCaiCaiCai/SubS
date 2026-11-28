@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/WuCaiCaiCai/SubS/internal/secrets"
 	"github.com/WuCaiCaiCai/SubS/internal/server"
@@ -109,8 +113,20 @@ func runServe(args []string) error {
 		return fmt.Errorf("加载密钥失败：%w", err)
 	}
 	srv := &server.Server{Store: db, InitToken: *initToken, Box: box, DataDir: *dataDir, DBPath: dbPath, Version: version}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go srv.StartAutoRefresh(ctx)
+
+	httpSrv := &http.Server{Addr: *addr, Handler: srv.Router()}
+	go func() {
+		<-ctx.Done()
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpSrv.Shutdown(shutCtx)
+	}()
+
 	log.Printf("subs %s 监听 %s（数据目录 %s）", version, *addr, *dataDir)
-	if err := http.ListenAndServe(*addr, srv.Router()); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("HTTP 服务异常退出：%w", err)
 	}
 	return nil

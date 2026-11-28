@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/WuCaiCaiCai/SubS"
+	"github.com/WuCaiCaiCai/SubS/internal/airport"
 	"github.com/WuCaiCaiCai/SubS/internal/secrets"
 	"github.com/WuCaiCaiCai/SubS/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -40,8 +41,19 @@ type Server struct {
 	// instance table keeps its own column for compatibility with older rows.
 	Version       string
 	Backups       backupStore
+	FetchAirport  func(ctx context.Context, rawURL string) ([]byte, error)
 	loginMu       sync.Mutex
 	loginAttempts map[string][]time.Time
+	refreshMu     sync.Mutex
+	refreshing    map[int64]bool
+	lastAttempt   map[int64]time.Time
+}
+
+func (s *Server) fetchSubscription(ctx context.Context, rawURL string) ([]byte, error) {
+	if s.FetchAirport != nil {
+		return s.FetchAirport(ctx, rawURL)
+	}
+	return airport.Fetch(ctx, rawURL)
 }
 type apiError struct {
 	Error struct {
