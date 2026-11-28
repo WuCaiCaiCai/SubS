@@ -10,16 +10,20 @@ import {
   Layers3,
   ListOrdered,
   Minus,
+  Pencil,
   Plane,
+  Plus,
   Search,
   Server,
   ShieldCheck,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react'
 import {
   api,
   ApiError,
+  type NamingRule,
   type NodeItem,
   type Profile,
   type ProfileItem,
@@ -198,6 +202,7 @@ export function ProfileEditorPage({
       {step === 1 && (
         <NodeOrderStep
           profileId={profileId}
+          initialRule={p.namingRule}
           nodes={profileNodes}
           items={items}
           overrides={overrides}
@@ -500,8 +505,33 @@ function NodeSelectStep({
   )
 }
 
+const SEGMENT_META: { key: string; label: string; sample: (pad: number, upper: boolean) => string }[] = [
+  { key: 'flag', label: '国旗', sample: () => '🇭🇰' },
+  { key: 'index', label: '序号', sample: (pad) => String(1).padStart(pad, '0') },
+  { key: 'region', label: '地区', sample: () => 'HK' },
+  { key: 'protocol', label: '协议', sample: (_pad, upper) => (upper ? 'HY2' : 'hy2') },
+  { key: 'source', label: '来源', sample: () => '主力机场' },
+  { key: 'rawName', label: '原名', sample: () => '香港专线 01' },
+]
+
+const NAMING_PRESETS: { label: string; segments: string[]; separator: string }[] = [
+  { label: '国旗-地区-序号-协议', segments: ['flag', 'region', 'index', 'protocol'], separator: '-' },
+  { label: '序号-地区-协议', segments: ['index', 'region', 'protocol'], separator: '-' },
+  { label: '国旗-来源-原名', segments: ['flag', 'source', 'rawName'], separator: '-' },
+  { label: '保持原名', segments: ['rawName'], separator: '-' },
+]
+
+const SEPARATOR_CHOICES = [
+  { value: '-', label: '-' },
+  { value: '_', label: '_' },
+  { value: ' ', label: '空格' },
+  { value: '|', label: '|' },
+  { value: '/', label: '/' },
+]
+
 function NodeOrderStep({
   profileId,
+  initialRule,
   items,
   nodes,
   overrides,
@@ -512,6 +542,7 @@ function NodeOrderStep({
   onRuleSaved,
 }: {
   profileId: number
+  initialRule?: NamingRule
   items: ProfileItem[]
   nodes: ProfileNode[]
   overrides: Record<number, string>
@@ -521,8 +552,49 @@ function NodeOrderStep({
   onSave: () => void
   onRuleSaved: () => void
 }) {
-  const [rule, setRule] = useState({ segments: 'index,region,protocol,rawName', separator: '-', zeroPad: 2, upperProtocol: true })
+  const [rule, setRule] = useState<NamingRule>(() => ({
+    segments: initialRule?.segments?.length ? initialRule.segments : ['index', 'region', 'protocol', 'rawName'],
+    separator: initialRule?.separator ?? '-',
+    zeroPad: initialRule?.zeroPad || 2,
+    upperProtocol: initialRule?.upperProtocol ?? true,
+  }))
   const [savingRule, setSavingRule] = useState(false)
+  const [renamingId, setRenamingId] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!initialRule) return
+    setRule({
+      segments: initialRule.segments?.length ? initialRule.segments : ['index', 'region', 'protocol', 'rawName'],
+      separator: initialRule.separator ?? '-',
+      zeroPad: initialRule.zeroPad || 2,
+      upperProtocol: initialRule.upperProtocol ?? true,
+    })
+  }, [initialRule])
+
+  const previewExample = useMemo(() => {
+    const parts = rule.segments
+      .map((seg) => SEGMENT_META.find((m) => m.key === seg)?.sample(rule.zeroPad, rule.upperProtocol))
+      .filter(Boolean)
+    return parts.join(rule.separator) || '（请至少保留一个片段）'
+  }, [rule])
+
+  const moveSegment = (idx: number, dir: -1 | 1) => {
+    const target = idx + dir
+    if (target < 0 || target >= rule.segments.length) return
+    const next = [...rule.segments]
+    ;[next[idx], next[target]] = [next[target], next[idx]]
+    setRule({ ...rule, segments: next })
+  }
+
+  const removeSegment = (seg: string) => {
+    if (rule.segments.length <= 1) return
+    setRule({ ...rule, segments: rule.segments.filter((s) => s !== seg) })
+  }
+
+  const addSegment = (seg: string) => {
+    if (rule.segments.includes(seg)) return
+    setRule({ ...rule, segments: [...rule.segments, seg] })
+  }
 
   // 展开成展示行：整源一行块头 + 其下节点，单节点各一行；排序只动 items。
   const rows = useMemo(() => {
@@ -558,16 +630,14 @@ function NodeOrderStep({
   }
 
   const applyRule = async () => {
+    if (rule.segments.length === 0) {
+      toast('error', '请至少保留一个命名片段')
+      return
+    }
     setSavingRule(true)
     try {
-      const segments = rule.segments
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-      await api.put(`/api/profiles/${profileId}`, {
-        namingRule: { segments, separator: rule.separator, zeroPad: rule.zeroPad, upperProtocol: rule.upperProtocol },
-      })
-      toast('success', '命名规则已更新')
+      await api.put(`/api/profiles/${profileId}`, { namingRule: rule })
+      toast('success', '命名规则已应用')
       onRuleSaved()
     } catch (err) {
       toast('error', err instanceof ApiError ? err.message : '保存命名规则失败')
@@ -576,11 +646,10 @@ function NodeOrderStep({
     }
   }
 
-  const explicit = items.filter((it) => it.kind === 'node')
   let seq = 0
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[1fr_280px]">
+    <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <div className="space-y-2">
         {items.length === 0 ? (
           <EmptyState icon={<ListOrdered size={18} />} title="还没有节点" description="回到第 1 步挑选节点。" />
@@ -607,47 +676,102 @@ function NodeOrderStep({
               }
               const isSource = row.item.kind === 'source'
               if (!isSource) seq += 1
+              const nodeId = row.node?.nodeId ?? row.item.refId
+              const isRenaming = !isSource && renamingId === nodeId
+              const customName = !isSource ? (overrides[nodeId] ?? '') : ''
               return (
-                <li key={`${row.item.kind}-${row.item.refId}`} className={`flex items-center gap-2 px-2.5 py-2 ${isSource ? 'bg-surface/40' : ''}`}>
-                  {isSource ? (
-                    <Layers3 size={13} className="ml-1 shrink-0 text-accent" />
-                  ) : (
-                    <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
-                      {String(seq).padStart(2, '0')}
-                    </span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className={`truncate ${isSource ? 'text-strong font-medium text-fg' : 'mono text-[0.75rem] text-fg-soft'}`}>
-                      {isSource ? row.item.label : row.node?.rawName}
-                    </div>
-                    {!isSource && (
-                      <div className="mt-0.5 flex items-center gap-1.5">
-                        <span className="mono truncate text-[0.75rem] text-accent-strong/90">{row.node?.outputName}</span>
-                        {row.node && duplicates.includes(row.node.outputName) && <Badge tone="amber">重名</Badge>}
-                      </div>
+                <li key={`${row.item.kind}-${row.item.refId}`} className={`px-2.5 py-2 ${isSource ? 'bg-surface/40' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    {isSource ? (
+                      <Layers3 size={13} className="ml-1 shrink-0 text-accent" />
+                    ) : (
+                      <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
+                        {String(seq).padStart(2, '0')}
+                      </span>
                     )}
+                    <div className="min-w-0 flex-1">
+                      <div className={`truncate ${isSource ? 'text-strong font-medium text-fg' : 'mono text-[0.75rem] text-fg-soft'}`}>
+                        {isSource ? row.item.label : row.node?.rawName}
+                      </div>
+                      {!isSource && (
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          <span className="mono truncate text-[0.75rem] text-accent-strong/90">
+                            {customName || row.node?.outputName}
+                          </span>
+                          {customName && <Badge tone="cyan">自定义</Badge>}
+                          {row.node && duplicates.includes(row.node.outputName) && !customName && <Badge tone="amber">重名</Badge>}
+                        </div>
+                      )}
+                    </div>
+                    {isSource && <Badge tone="cyan">整源 {row.item.nodeCount || ''}</Badge>}
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      {!isSource && (
+                        <button
+                          type="button"
+                          aria-label="自定义节点名称"
+                          title="自定义节点名称"
+                          onClick={() => setRenamingId(isRenaming ? null : nodeId)}
+                          className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${
+                            isRenaming || customName
+                              ? 'bg-accent/15 text-accent'
+                              : 'text-fg-subtle hover:bg-raised hover:text-fg'
+                          }`}
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        aria-label={isSource ? `整源上移 ${row.item.label}` : '上移'}
+                        disabled={row.index === 0}
+                        onClick={() => move(row.index, -1)}
+                        className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+                      >
+                        <ChevronUp size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={isSource ? `整源下移 ${row.item.label}` : '下移'}
+                        disabled={row.index === items.length - 1}
+                        onClick={() => move(row.index, 1)}
+                        className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+                      >
+                        <ChevronDown size={13} />
+                      </button>
+                    </div>
                   </div>
-                  {isSource && <Badge tone="cyan">整源 {row.item.nodeCount || ''}</Badge>}
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <button
-                      type="button"
-                      aria-label={isSource ? `整源上移 ${row.item.label}` : '上移'}
-                      disabled={row.index === 0}
-                      onClick={() => move(row.index, -1)}
-                      className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
-                    >
-                      <ChevronUp size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={isSource ? `整源下移 ${row.item.label}` : '下移'}
-                      disabled={row.index === items.length - 1}
-                      onClick={() => move(row.index, 1)}
-                      className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
-                    >
-                      <ChevronDown size={13} />
-                    </button>
-                  </div>
+                  {isRenaming && (
+                    <div className="mt-2 flex items-center gap-1.5 pl-8">
+                      <input
+                        className="input mono h-8 flex-1 text-[0.75rem]"
+                        placeholder={row.node?.outputName ?? '留空恢复自动命名'}
+                        value={customName}
+                        onChange={(e) => onOverrides({ ...overrides, [nodeId]: e.target.value })}
+                        autoFocus
+                      />
+                      {customName && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = { ...overrides }
+                            delete next[nodeId]
+                            onOverrides(next)
+                          }}
+                          className="btn btn-ghost h-8 px-2 text-[0.6875rem]"
+                          title="恢复自动命名"
+                        >
+                          恢复默认
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setRenamingId(null)}
+                        className="btn btn-ghost h-8 px-2 text-[0.6875rem]"
+                      >
+                        完成
+                      </button>
+                    </div>
+                  )}
                 </li>
               )
             })}
@@ -661,72 +785,165 @@ function NodeOrderStep({
       </div>
 
       <aside className="space-y-3">
-        <div className="card space-y-3 p-3.5">
-          <SectionLabel>命名规则</SectionLabel>
-          <label className="block space-y-1">
-            <span className="text-[0.7188rem] text-fg-muted">片段顺序</span>
-            <input
-              className="input mono h-9 text-[0.75rem]"
-              value={rule.segments}
-              onChange={(e) => setRule({ ...rule, segments: e.target.value })}
-            />
-            <span className="block text-[0.6562rem] text-fg-subtle">可选：index / region / protocol / rawName</span>
-          </label>
-          <label className="block space-y-1">
-            <span className="text-[0.7188rem] text-fg-muted">分隔符</span>
-            <input
-              className="input mono h-9 text-[0.75rem]"
-              value={rule.separator}
-              onChange={(e) => setRule({ ...rule, separator: e.target.value })}
-            />
-          </label>
-          <label className="block space-y-1">
+        <div className="card space-y-3.5 p-3.5">
+          <div className="flex items-center justify-between">
+            <SectionLabel>命名规则</SectionLabel>
+            <span className="text-[0.6875rem] text-fg-subtle">点击积木调整顺序</span>
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="block text-[0.7188rem] text-fg-muted">常用预设</span>
+            <div className="flex flex-wrap gap-1.5">
+              {NAMING_PRESETS.map((preset) => {
+                const active =
+                  rule.segments.join(',') === preset.segments.join(',') && rule.separator === preset.separator
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setRule({ ...rule, segments: [...preset.segments], separator: preset.separator })}
+                    className={`rounded-md border px-2 py-1 text-[0.6875rem] transition-colors ${
+                      active
+                        ? 'border-accent/50 bg-accent/15 text-accent-strong'
+                        : 'border-line bg-canvas text-fg-muted hover:border-line-strong hover:text-fg'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="block text-[0.7188rem] text-fg-muted">当前组合顺序</span>
+            <div className="flex flex-wrap gap-1.5">
+              {rule.segments.map((seg, idx) => {
+                const meta = SEGMENT_META.find((m) => m.key === seg)
+                return (
+                  <div
+                    key={seg}
+                    className="inline-flex items-center gap-1 rounded-md border border-accent/35 bg-accent/10 px-2 py-1 text-[0.7188rem] text-fg"
+                  >
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => moveSegment(idx, -1)}
+                      className="text-fg-muted hover:text-fg disabled:opacity-25"
+                      title="左移"
+                    >
+                      ←
+                    </button>
+                    <span className="font-medium">{meta?.label ?? seg}</span>
+                    <button
+                      type="button"
+                      disabled={idx === rule.segments.length - 1}
+                      onClick={() => moveSegment(idx, 1)}
+                      className="text-fg-muted hover:text-fg disabled:opacity-25"
+                      title="右移"
+                    >
+                      →
+                    </button>
+                    {rule.segments.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeSegment(seg)}
+                        className="ml-0.5 text-fg-subtle hover:text-danger"
+                        title="移除"
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {SEGMENT_META.some((m) => !rule.segments.includes(m.key)) && (
+              <div className="flex flex-wrap items-center gap-1 pt-1">
+                <span className="text-[0.6562rem] text-fg-subtle">添加：</span>
+                {SEGMENT_META.filter((m) => !rule.segments.includes(m.key)).map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => addSegment(m.key)}
+                    className="inline-flex items-center gap-0.5 rounded border border-dashed border-line-strong px-1.5 py-0.5 text-[0.6875rem] text-fg-muted hover:border-accent hover:text-accent"
+                  >
+                    <Plus size={10} /> {m.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="block text-[0.7188rem] text-fg-muted">分隔符</span>
+            <div className="flex flex-wrap items-center gap-1">
+              {SEPARATOR_CHOICES.map((ch) => (
+                <button
+                  key={ch.label}
+                  type="button"
+                  onClick={() => setRule({ ...rule, separator: ch.value })}
+                  className={`h-7 min-w-8 rounded border px-2 font-mono text-[0.6875rem] transition-colors ${
+                    rule.separator === ch.value
+                      ? 'border-accent/50 bg-accent/15 text-accent-strong'
+                      : 'border-line bg-canvas text-fg-muted hover:border-line-strong'
+                  }`}
+                >
+                  {ch.label}
+                </button>
+              ))}
+              <input
+                className="input mono h-7 w-12 px-1.5 text-center text-[0.7188rem]"
+                value={rule.separator}
+                maxLength={4}
+                onChange={(e) => setRule({ ...rule, separator: e.target.value })}
+                aria-label="自定义分隔符"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
             <span className="text-[0.7188rem] text-fg-muted">序号位数</span>
-            <input
-              type="number"
-              min={1}
-              max={4}
-              className="input mono h-9 text-[0.75rem]"
-              value={rule.zeroPad}
-              onChange={(e) => setRule({ ...rule, zeroPad: Number(e.target.value) })}
-            />
-          </label>
-          <label className="flex items-center gap-2 text-[0.7188rem] text-fg-soft">
+            <div className="flex gap-1">
+              {[
+                { v: 1, label: '1' },
+                { v: 2, label: '01' },
+                { v: 3, label: '001' },
+              ].map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setRule({ ...rule, zeroPad: opt.v })}
+                  className={`h-7 rounded border px-2 font-mono text-[0.6875rem] transition-colors ${
+                    rule.zeroPad === opt.v
+                      ? 'border-accent/50 bg-accent/15 text-accent-strong'
+                      : 'border-line bg-canvas text-fg-muted hover:border-line-strong'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex items-center justify-between text-[0.7188rem] text-fg-soft">
+            <span>协议名大写</span>
             <input
               type="checkbox"
               checked={rule.upperProtocol}
               onChange={(e) => setRule({ ...rule, upperProtocol: e.target.checked })}
               className="h-4 w-4"
             />
-            协议名大写
           </label>
-          <button type="button" className="btn btn-ghost w-full" onClick={applyRule} disabled={savingRule}>
-            {savingRule ? <Spinner /> : null} 应用规则
-          </button>
-        </div>
 
-        <div className="card p-3.5">
-          <SectionLabel>单节点改名</SectionLabel>
-          <p className="mt-1 text-[0.6875rem] text-fg-muted">
-            只对逐个挑选的节点生效；整源里的节点沿用自动命名。
-          </p>
-          <div className="mt-2 space-y-1.5">
-            {explicit.length === 0 && <p className="text-[0.6875rem] text-fg-subtle">当前没有单独挑选的节点。</p>}
-            {explicit.slice(0, 8).map((it) => {
-              const n = nodes.find((x) => x.nodeId === it.refId)
-              return (
-                <div key={it.refId} className="space-y-1">
-                  <span className="mono block truncate text-[0.6562rem] text-fg-muted">{n?.rawName ?? it.label}</span>
-                  <input
-                    className="input mono h-8 text-[0.7188rem]"
-                    placeholder={n?.outputName ?? ''}
-                    value={overrides[it.refId] ?? ''}
-                    onChange={(e) => onOverrides({ ...overrides, [it.refId]: e.target.value })}
-                  />
-                </div>
-              )
-            })}
+          <div className="rounded-md border border-line bg-canvas px-2.5 py-2">
+            <div className="text-[0.6562rem] text-fg-subtle">实时效果示例</div>
+            <div className="mono mt-0.5 truncate text-[0.75rem] text-accent-strong">{previewExample}</div>
           </div>
+
+          <button type="button" className="btn btn-primary w-full" onClick={applyRule} disabled={savingRule}>
+            {savingRule ? <Spinner /> : null} 应用到当前编排
+          </button>
         </div>
       </aside>
     </section>

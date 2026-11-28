@@ -37,7 +37,7 @@ func ParseRule(raw string) (NamingRule, error) {
 	if len(r.Segments) == 0 {
 		return NamingRule{}, fmt.Errorf("命名规则至少需要一个段")
 	}
-	allowed := map[string]bool{"rawName": true, "source": true, "protocol": true, "index": true, "region": true}
+	allowed := map[string]bool{"rawName": true, "source": true, "protocol": true, "index": true, "region": true, "flag": true}
 	for _, s := range r.Segments {
 		if !allowed[s] {
 			return NamingRule{}, fmt.Errorf("未知命名段: %s", s)
@@ -97,6 +97,7 @@ func (r NamingRule) Apply(n NodeInput) string {
 		"protocol": n.Protocol,
 		"index":    padIndex(n.Index, r.ZeroPad),
 		"region":   Region(n.RawName),
+		"flag":     RegionFlag(n.RawName),
 	}
 	if r.UpperProtocol {
 		values["protocol"] = strings.ToUpper(values["protocol"])
@@ -154,47 +155,131 @@ var regions = []struct {
 	words []string
 	code  string
 }{
-	{[]string{"香港", "hongkong", "hong kong", "hk", "深港", "沪港"}, "HK"},
-	{[]string{"台湾", "台灣", "台北", "新北", "彰化", "taiwan", "tw", "taipei"}, "TW"},
-	{[]string{"日本", "东京", "東京", "大阪", "埼玉", "沪日", "深日", "japan", "jp", "tokyo", "osaka", "saitama"}, "JP"},
-	{[]string{"新加坡", "狮城", "獅城", "singapore", "sg"}, "SG"},
-	{[]string{"美国", "美國", "洛杉矶", "西雅图", "圣何塞", "硅谷", "达拉斯", "纽约", "united states", "usa", "us", "los angeles", "seattle", "san jose", "dallas", "new york"}, "US"},
-	{[]string{"韩国", "韓國", "首尔", "首爾", "korea", "kr", "seoul"}, "KR"},
-	{[]string{"德国", "德國", "法兰克福", "germany", "de", "frankfurt"}, "DE"},
-	{[]string{"英国", "英國", "伦敦", "united kingdom", "uk", "gb", "london"}, "GB"},
-	{[]string{"法国", "法國", "巴黎", "france", "fr", "paris"}, "FR"},
-	{[]string{"荷兰", "荷蘭", "阿姆斯特丹", "netherlands", "nl", "amsterdam"}, "NL"},
-	{[]string{"加拿大", "多伦多", "canada", "ca", "toronto"}, "CA"},
-	{[]string{"澳大利亚", "澳洲", "悉尼", "australia", "au", "sydney"}, "AU"},
-	{[]string{"土耳其", "turkey", "tr", "istanbul"}, "TR"},
-	{[]string{"印度", "孟买", "india", "in", "mumbai"}, "IN"},
-	{[]string{"巴西", "圣保罗", "brazil", "br", "sao paulo"}, "BR"},
-	{[]string{"俄罗斯", "莫斯科", "russia", "ru", "moscow"}, "RU"},
-	{[]string{"马来西亚", "吉隆坡", "malaysia", "my", "kuala lumpur"}, "MY"},
-	{[]string{"泰国", "曼谷", "thailand", "th", "bangkok"}, "TH"},
-	{[]string{"越南", "vietnam", "vn"}, "VN"},
-	{[]string{"菲律宾", "马尼拉", "philippines", "ph", "manila"}, "PH"},
-	{[]string{"印度尼西亚", "印尼", "雅加达", "indonesia", "id", "jakarta"}, "ID"},
-	{[]string{"阿联酋", "迪拜", "uae", "ae", "dubai"}, "AE"},
-	{[]string{"瑞士", "苏黎世", "switzerland", "ch", "zurich"}, "CH"},
-	{[]string{"瑞典", "sweden", "se", "stockholm"}, "SE"},
-	{[]string{"意大利", "米兰", "italy", "it", "milan"}, "IT"},
-	{[]string{"西班牙", "spain", "es", "madrid"}, "ES"},
-	{[]string{"波兰", "poland", "pl", "warsaw"}, "PL"},
+	{[]string{"香港", "hongkong", "hong kong", "hk", "hkg", "深港", "沪港", "京港", "广港"}, "HK"},
+	{[]string{"澳门", "澳門", "macau", "macao", "mo", "mfm"}, "MO"},
+	{[]string{"台湾", "台灣", "台北", "新北", "彰化", "高雄", "台中", "taiwan", "taipei", "tw", "twn", "tpe"}, "TW"},
+	{[]string{"日本", "东京", "東京", "大阪", "埼玉", "名古屋", "福冈", "沪日", "深日", "京日", "广日", "japan", "tokyo", "osaka", "saitama", "jp", "jpn", "tyo", "osa", "nrt"}, "JP"},
+	{[]string{"新加坡", "狮城", "獅城", "坡县", "singapore", "sg", "sgp", "sin"}, "SG"},
+	{[]string{"美国", "美國", "洛杉矶", "西雅图", "圣何塞", "硅谷", "达拉斯", "纽约", "芝加哥", "迈阿密", "亚特兰大", "阿什本", "凤凰城", "弗里蒙特", "united states", "america", "los angeles", "seattle", "san jose", "silicon valley", "dallas", "new york", "chicago", "miami", "atlanta", "ashburn", "phoenix", "fremont", "usa", "us", "lax", "sjc", "sea", "nyc", "dfw", "ord", "iad", "mia", "atl"}, "US"},
+	{[]string{"韩国", "韓國", "首尔", "首爾", "釜山", "春川", "korea", "seoul", "busan", "kr", "kor", "icn", "sel"}, "KR"},
+	{[]string{"德国", "德國", "法兰克福", "柏林", "慕尼黑", "纽伦堡", "germany", "frankfurt", "berlin", "munich", "de", "deu", "fra", "ber", "muc"}, "DE"},
+	{[]string{"英国", "英國", "伦敦", "曼彻斯特", "united kingdom", "britain", "england", "london", "manchester", "uk", "gb", "gbr", "lon", "lhr"}, "GB"},
+	{[]string{"法国", "法國", "巴黎", "马赛", "france", "paris", "marseille", "fr", "par", "cdg"}, "FR"},
+	{[]string{"荷兰", "荷蘭", "阿姆斯特丹", "netherlands", "holland", "amsterdam", "nl", "nld", "ams"}, "NL"},
+	{[]string{"加拿大", "多伦多", "温哥华", "蒙特利尔", "canada", "toronto", "vancouver", "montreal", "ca", "can", "yyz", "yvr"}, "CA"},
+	{[]string{"澳大利亚", "澳洲", "悉尼", "墨尔本", "australia", "sydney", "melbourne", "au", "aus", "syd", "mel"}, "AU"},
+	{[]string{"新西兰", "紐西蘭", "奥克兰", "new zealand", "auckland", "nz", "nzl", "akl"}, "NZ"},
+	{[]string{"土耳其", "伊斯坦布尔", "turkey", "turkiye", "istanbul", "tr", "tur", "ist"}, "TR"},
+	{[]string{"印度", "孟买", "新德里", "班加罗尔", "india", "mumbai", "delhi", "bangalore", "in", "ind", "bom", "del"}, "IN"},
+	{[]string{"巴西", "圣保罗", "brazil", "sao paulo", "br", "bra", "gru"}, "BR"},
+	{[]string{"俄罗斯", "莫斯科", "圣彼得堡", "伯力", "russia", "moscow", "petersburg", "ru", "rus", "mow", "svo"}, "RU"},
+	{[]string{"马来西亚", "吉隆坡", "malaysia", "kuala lumpur", "my", "mys", "kul"}, "MY"},
+	{[]string{"泰国", "曼谷", "thailand", "bangkok", "th", "tha", "bkk"}, "TH"},
+	{[]string{"越南", "胡志明", "河内", "vietnam", "ho chi minh", "hanoi", "vn", "vnm", "sgn", "han"}, "VN"},
+	{[]string{"菲律宾", "马尼拉", "philippines", "manila", "ph", "phl", "mnl"}, "PH"},
+	{[]string{"印度尼西亚", "印尼", "雅加达", "indonesia", "jakarta", "id", "idn", "cgk"}, "ID"},
+	{[]string{"阿联酋", "迪拜", "阿布扎比", "uae", "dubai", "abu dhabi", "ae", "are", "dxb"}, "AE"},
+	{[]string{"瑞士", "苏黎世", "日内瓦", "switzerland", "zurich", "geneva", "ch", "che", "zrh"}, "CH"},
+	{[]string{"瑞典", "斯德哥尔摩", "sweden", "stockholm", "se", "swe", "arn"}, "SE"},
+	{[]string{"意大利", "米兰", "罗马", "italy", "milan", "rome", "it", "ita", "mil", "mxp", "rom"}, "IT"},
+	{[]string{"西班牙", "马德里", "巴塞罗那", "spain", "madrid", "barcelona", "es", "esp", "mad", "bcn"}, "ES"},
+	{[]string{"波兰", "华沙", "poland", "warsaw", "pl", "pol", "waw"}, "PL"},
+	{[]string{"芬兰", "赫尔辛基", "finland", "helsinki", "fi", "fin", "hel"}, "FI"},
+	{[]string{"挪威", "奥斯陆", "norway", "oslo", "no", "nor", "osl"}, "NO"},
+	{[]string{"丹麦", "哥本哈根", "denmark", "copenhagen", "dk", "dnk", "cph"}, "DK"},
+	{[]string{"爱尔兰", "都柏林", "ireland", "dublin", "ie", "irl", "dub"}, "IE"},
+	{[]string{"奥地利", "维也纳", "austria", "vienna", "at", "aut", "vie"}, "AT"},
+	{[]string{"葡萄牙", "里斯本", "portugal", "lisbon", "pt", "prt", "lis"}, "PT"},
+	{[]string{"希腊", "雅典", "greece", "athens", "gr", "grc", "ath"}, "GR"},
+	{[]string{"捷克", "布拉格", "czech", "prague", "cz", "cze", "prg"}, "CZ"},
+	{[]string{"匈牙利", "布达佩斯", "hungary", "budapest", "hu", "hun", "bud"}, "HU"},
+	{[]string{"罗马尼亚", "布加勒斯特", "romania", "bucharest", "ro", "rou", "otp"}, "RO"},
+	{[]string{"保加利亚", "索非亚", "bulgaria", "sofia", "bg", "bgr", "sof"}, "BG"},
+	{[]string{"乌克兰", "基辅", "ukraine", "kyiv", "kiev", "ua", "ukr", "iev"}, "UA"},
+	{[]string{"以色列", "特拉维夫", "israel", "tel aviv", "il", "isr", "tlv"}, "IL"},
+	{[]string{"卢森堡", "luxembourg", "lu", "lux"}, "LU"},
+	{[]string{"南非", "约翰内斯堡", "south africa", "johannesburg", "za", "zaf", "jnb"}, "ZA"},
+	{[]string{"阿根廷", "布宜诺斯艾利斯", "argentina", "buenos aires", "ar", "arg", "eze"}, "AR"},
+	{[]string{"智利", "圣地亚哥", "chile", "santiago", "cl", "chl", "scl"}, "CL"},
+	{[]string{"墨西哥", "mexico", "mx", "mex"}, "MX"},
 }
 
-// Region maps a raw node name to a region code, longest match first.
+func isASCIILetter(b byte) bool {
+	return b >= 'a' && b <= 'z'
+}
+
+func isASCIIWord(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if !isASCIILetter(s[i]) {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
+// matchWord checks whether word appears in lower; short ASCII codes (<=3 chars)
+// require non-letter boundaries so "node" does not match "de" or "free" match "fr".
+func matchWord(lower, word string) bool {
+	if len(word) > 3 || !isASCIIWord(word) {
+		return strings.Contains(lower, word)
+	}
+	start := 0
+	for {
+		idx := strings.Index(lower[start:], word)
+		if idx < 0 {
+			return false
+		}
+		abs := start + idx
+		leftOK := abs == 0 || !isASCIILetter(lower[abs-1])
+		rightPos := abs + len(word)
+		rightOK := rightPos == len(lower) || !isASCIILetter(lower[rightPos])
+		if leftOK && rightOK {
+			return true
+		}
+		start = abs + 1
+	}
+}
+
+func extractFlagCode(s string) string {
+	var prev rune
+	for _, r := range s {
+		if r >= 0x1F1E6 && r <= 0x1F1FF {
+			if prev != 0 {
+				return string([]byte{'A' + byte(prev-0x1F1E6), 'A' + byte(r-0x1F1E6)})
+			}
+			prev = r
+		} else {
+			prev = 0
+		}
+	}
+	return ""
+}
+
+// Region maps a raw node name to a region code, longest match first,
+// falling back to any flag emoji present in the name.
 func Region(rawName string) string {
 	lower := strings.ToLower(rawName)
 	best, bestLen := "", 0
 	for _, r := range regions {
 		for _, w := range r.words {
-			if strings.Contains(lower, w) && len(w) > bestLen {
+			if matchWord(lower, w) && len(w) > bestLen {
 				best, bestLen = r.code, len(w)
 			}
 		}
 	}
-	return best
+	if best != "" {
+		return best
+	}
+	return extractFlagCode(rawName)
+}
+
+// RegionFlag maps a raw node name to its Unicode regional indicator flag emoji.
+func RegionFlag(rawName string) string {
+	code := Region(rawName)
+	if len(code) != 2 || code[0] < 'A' || code[0] > 'Z' || code[1] < 'A' || code[1] > 'Z' {
+		return ""
+	}
+	return string([]rune{0x1F1E6 + rune(code[0]-'A'), 0x1F1E6 + rune(code[1]-'A')})
 }
 
 // NewToken returns a URL-safe subscription token.

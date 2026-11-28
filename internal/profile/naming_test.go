@@ -17,12 +17,21 @@ func TestCleanRawName(t *testing.T) {
 
 func TestRegionMapping(t *testing.T) {
 	cases := map[string]string{
-		"香港 IPLC 01":       "HK",
-		"🇯🇵 Tokyo Premium": "JP",
-		"新加坡 狮城":           "SG",
-		"Los Angeles US":   "US",
-		"Frankfurt DE":     "DE",
-		"未知地区节点":           "",
+		"香港 IPLC 01":        "HK",
+		"🇭🇰HKG 01":          "HK",
+		"🇹🇼TWN 01":          "TW",
+		"🇸🇬SGP 01":          "SG",
+		"🇺🇸USA.LAX 01":      "US",
+		"🇯🇵 Tokyo Premium":  "JP",
+		"🇯🇵 01":             "JP",
+		"新加坡 狮城":            "SG",
+		"Los Angeles US":    "US",
+		"Frankfurt DE":      "DE",
+		"未知地区节点":            "",
+		"Node 01":           "",
+		"Free Cloud Plus":   "",
+		"Online Test 02":    "",
+		"Unlimited Traffic": "",
 	}
 	for in, want := range cases {
 		if got := Region(in); got != want {
@@ -37,6 +46,18 @@ func TestApplyRule(t *testing.T) {
 	want := "03-HK-HY2-香港 01"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
+	}
+
+	rWithFlagAndSource, err := ParseRule(`{"segments":["flag","source","region","rawName"],"separator":"-","zeroPad":2,"upperProtocol":true}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got2 := rWithFlagAndSource.Apply(NodeInput{RawName: "香港 01", Source: "主力机场", Protocol: "vless", Index: 1})
+	if got2 != "🇭🇰-主力机场-HK-香港 01" {
+		t.Fatalf("got %q", got2)
+	}
+	if RegionFlag("未知节点") != "" {
+		t.Fatalf("expected empty flag for unknown region")
 	}
 }
 
