@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -560,6 +560,14 @@ function NodeOrderStep({
   }))
   const [savingRule, setSavingRule] = useState(false)
   const [renamingId, setRenamingId] = useState<number | null>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const [dragState, setDragState] = useState<{ fromRow: number; overRow: number } | null>(null)
+  const pressRef = useRef<{
+    rowIdx: number
+    startY: number
+    active: boolean
+    timer: number | null
+  } | null>(null)
 
   useEffect(() => {
     if (!initialRule) return
@@ -621,12 +629,167 @@ function NodeOrderStep({
     return out
   }, [items, nodes])
 
-  const move = (index: number, dir: -1 | 1) => {
-    const target = index + dir
-    if (target < 0 || target >= items.length) return
-    const next = [...items]
-    ;[next[index], next[target]] = [next[target], next[index]]
-    onReorder(next)
+  const expandSourceInList = useCallback(
+    (list: ProfileItem[], sourceType: string, sourceId: number): ProfileItem[] => {
+      const children = nodes.filter((n) => n.sourceType === sourceType && n.sourceId === sourceId)
+      const expanded: ProfileItem[] = children.map((n, idx) => ({
+        kind: 'node',
+        refId: n.nodeId,
+        sourceType: '',
+        nameOverride: overrides[n.nodeId] ?? '',
+        sortOrder: idx,
+        label: n.rawName,
+        protocol: n.protocol,
+        nodeCount: 1,
+      }))
+      const out: ProfileItem[] = []
+      for (const it of list) {
+        if (it.kind === 'source' && it.sourceType === sourceType && it.refId === sourceId) {
+          out.push(...expanded)
+        } else {
+          out.push(it)
+        }
+      }
+      return out
+    },
+    [nodes, overrides],
+  )
+
+  const reorderRows = useCallback(
+    (fromRowIdx: number, toRowIdx: number) => {
+      if (fromRowIdx === toRowIdx) return
+      const from = rows[fromRowIdx]
+      const to = rows[toRowIdx]
+      if (!from || !to) return
+
+      // 整源块之间直接调换顺序，不展开
+      if (from.type === 'item' && to.type === 'item' && (from.item.kind !== 'source' || to.item.kind === 'source')) {
+        const next = [...items]
+        const [moved] = next.splice(from.index, 1)
+        next.splice(to.index, 0, moved)
+        onReorder(next)
+        return
+      }
+
+      // 涉及整源内部节点时，先把相关整源展开为独立节点再排序
+      let next = [...items]
+      let expanded = false
+      if (from.type === 'child' || (from.item.kind === 'source' && to.type === 'child')) {
+        next = expandSourceInList(next, from.item.sourceType, from.item.refId)
+        expanded = true
+      }
+      if (to.type === 'child' && !(to.item.sourceType === from.item.sourceType && to.item.refId === from.item.refId)) {
+        next = expandSourceInList(next, to.item.sourceType, to.item.refId)
+        expanded = true
+      }
+
+      const findItemIdx = (r: (typeof rows)[number]) => {
+        if (r.node) {
+          return next.findIndex((it) => it.kind === 'node' && it.refId === r.node!.nodeId)
+        }
+        return next.findIndex((it) => it.kind === r.item.kind && it.refId === r.item.refId && it.sourceType === r.item.sourceType)
+      }
+      const fromIdx = findItemIdx(from)
+      const toIdx = findItemIdx(to)
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return
+      const [moved] = next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, moved)
+      if (expanded) {
+        toast('info', '已将该整源展开为独立节点以支持单节点排序')
+      }
+      onReorder(next)
+    },
+    [expandSourceInList, items, onReorder, rows],
+  )
+
+  const moveRow = (rowIdx: number, dir: -1 | 1) => {
+    const target = rowIdx + dir
+    if (target < 0 || target >= rows.length) return
+    reorderRows(rowIdx, target)
+  }
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const p = pressRef.current
+      if (!p) return
+      if (!p.active) {
+        if (Math.abs(e.clientY - p.startY) > 6) {
+          if (p.timer !== null) {
+            window.clearTimeout(p.timer)
+            p.timer = null
+          }
+          if (e.pointerType === 'mouse') {
+            p.active = true
+            setDragState({ fromRow: p.rowIdx, overRow: p.rowIdx })
+          } else {
+            // 触摸模式下未满长按时间就滑动，判定为页面滚动
+            pressRef.current = null
+            return
+          }
+        } else {
+          return
+        }
+      }
+      e.preventDefault()
+      const ul = listRef.current
+      if (!ul) return
+      const children = Array.from(ul.children) as HTMLElement[]
+      let hit = p.rowIdx
+      for (let i = 0; i < children.length; i++) {
+        const rect = children[i].getBoundingClientRect()
+        if (e.clientY <= rect.top + rect.height / 2) {
+          hit = i
+          break
+        }
+        hit = i
+      }
+      setDragState((prev) => (prev ? { ...prev, overRow: hit } : null))
+    }
+
+    const onEnd = () => {
+      const p = pressRef.current
+      if (p?.timer != null) window.clearTimeout(p.timer)
+      pressRef.current = null
+      setDragState((prev) => {
+        if (prev && prev.fromRow !== prev.overRow) {
+          reorderRows(prev.fromRow, prev.overRow)
+        }
+        return null
+      })
+    }
+
+    window.addEventListener('pointermove', onMove, { passive: false })
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
+    }
+  }, [reorderRows])
+
+  const startPress = (e: React.PointerEvent, rowIdx: number, immediateMouse = false) => {
+    const target = e.target as HTMLElement | null
+    if (!immediateMouse && target?.closest('button, input, a')) return
+    if (e.button !== 0 && e.pointerType === 'mouse') return
+    if (pressRef.current?.timer != null) window.clearTimeout(pressRef.current.timer)
+
+    if (e.pointerType === 'mouse' && immediateMouse) {
+      pressRef.current = { rowIdx, startY: e.clientY, active: true, timer: null }
+      setDragState({ fromRow: rowIdx, overRow: rowIdx })
+      return
+    }
+    const timer =
+      e.pointerType === 'touch'
+        ? window.setTimeout(() => {
+            if (pressRef.current && pressRef.current.rowIdx === rowIdx) {
+              pressRef.current.active = true
+              setDragState({ fromRow: rowIdx, overRow: rowIdx })
+              navigator.vibrate?.(12)
+            }
+          }, 220)
+        : null
+    pressRef.current = { rowIdx, startY: e.clientY, active: false, timer }
   }
 
   const applyRule = async () => {
@@ -654,128 +817,197 @@ function NodeOrderStep({
         {items.length === 0 ? (
           <EmptyState icon={<ListOrdered size={18} />} title="还没有节点" description="回到第 1 步挑选节点。" />
         ) : (
-          <ul className="divide-y divide-line/70 overflow-hidden rounded-lg border border-line">
-            {rows.map((row) => {
-              if (row.type === 'child') {
-                seq += 1
-                const n = row.node!
-                return (
-                  <li key={`${row.item.kind}-${row.item.refId}-${n.nodeId}`} className="flex items-center gap-2 py-2 pl-11 pr-2.5">
-                    <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
-                      {String(seq).padStart(2, '0')}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="mono truncate text-[0.75rem] text-fg-soft">{n.rawName}</div>
-                      <div className="mt-0.5 flex items-center gap-1.5">
-                        <span className="mono truncate text-[0.75rem] text-accent-strong/90">{n.outputName}</span>
-                        {duplicates.includes(n.outputName) && <Badge tone="amber">重名</Badge>}
-                      </div>
-                    </div>
-                  </li>
-                )
-              }
-              const isSource = row.item.kind === 'source'
-              if (!isSource) seq += 1
-              const nodeId = row.node?.nodeId ?? row.item.refId
-              const isRenaming = !isSource && renamingId === nodeId
-              const customName = !isSource ? (overrides[nodeId] ?? '') : ''
-              return (
-                <li key={`${row.item.kind}-${row.item.refId}`} className={`px-2.5 py-2 ${isSource ? 'bg-surface/40' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    {isSource ? (
-                      <Layers3 size={13} className="ml-1 shrink-0 text-accent" />
-                    ) : (
+          <>
+            <p className="text-[0.6875rem] text-fg-subtle">
+              拖拽左侧手柄或长按节点行即可调整顺序（手机端长按 0.2 秒后拖动）。
+            </p>
+            <ul
+              ref={listRef}
+              className={`divide-y divide-line/70 overflow-hidden rounded-lg border border-line ${
+                dragState ? 'touch-none select-none' : ''
+              }`}
+            >
+              {rows.map((row, rowIdx) => {
+                const isDragging = dragState?.fromRow === rowIdx
+                const isDropTarget = dragState && dragState.overRow === rowIdx && dragState.fromRow !== rowIdx
+                const dropRing = isDropTarget
+                  ? dragState.fromRow < rowIdx
+                    ? 'border-b-2 border-b-accent'
+                    : 'border-t-2 border-t-accent'
+                  : ''
+                if (row.type === 'child') {
+                  seq += 1
+                  const n = row.node!
+                  return (
+                    <li
+                      key={`${row.item.kind}-${row.item.refId}-${n.nodeId}`}
+                      onPointerDown={(e) => startPress(e, rowIdx)}
+                      className={`flex items-center gap-2 py-2 pl-6 pr-2.5 transition-colors ${
+                        isDragging ? 'bg-raised/90 ring-1 ring-accent/50' : ''
+                      } ${dropRing}`}
+                    >
+                      <span
+                        onPointerDown={(e) => {
+                          e.stopPropagation()
+                          startPress(e, rowIdx, true)
+                        }}
+                        className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center text-fg-subtle hover:text-fg active:cursor-grabbing"
+                        title="拖动排序"
+                      >
+                        <GripVertical size={13} />
+                      </span>
                       <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
                         {String(seq).padStart(2, '0')}
                       </span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className={`truncate ${isSource ? 'text-strong font-medium text-fg' : 'mono text-[0.75rem] text-fg-soft'}`}>
-                        {isSource ? row.item.label : row.node?.rawName}
-                      </div>
-                      {!isSource && (
+                      <div className="min-w-0 flex-1">
+                        <div className="mono truncate text-[0.75rem] text-fg-soft">{n.rawName}</div>
                         <div className="mt-0.5 flex items-center gap-1.5">
-                          <span className="mono truncate text-[0.75rem] text-accent-strong/90">
-                            {customName || row.node?.outputName}
-                          </span>
-                          {customName && <Badge tone="cyan">自定义</Badge>}
-                          {row.node && duplicates.includes(row.node.outputName) && !customName && <Badge tone="amber">重名</Badge>}
+                          <span className="mono truncate text-[0.75rem] text-accent-strong/90">{n.outputName}</span>
+                          {duplicates.includes(n.outputName) && <Badge tone="amber">重名</Badge>}
                         </div>
-                      )}
-                    </div>
-                    {isSource && <Badge tone="cyan">整源 {row.item.nodeCount || ''}</Badge>}
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      {!isSource && (
+                      </div>
+                      <div className="flex shrink-0 items-center gap-0.5">
                         <button
                           type="button"
-                          aria-label="自定义节点名称"
-                          title="自定义节点名称"
-                          onClick={() => setRenamingId(isRenaming ? null : nodeId)}
-                          className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${
-                            isRenaming || customName
-                              ? 'bg-accent/15 text-accent'
-                              : 'text-fg-subtle hover:bg-raised hover:text-fg'
-                          }`}
+                          aria-label="上移"
+                          disabled={rowIdx === 0}
+                          onClick={() => moveRow(rowIdx, -1)}
+                          className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
                         >
-                          <Pencil size={12} />
+                          <ChevronUp size={13} />
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        aria-label={isSource ? `整源上移 ${row.item.label}` : '上移'}
-                        disabled={row.index === 0}
-                        onClick={() => move(row.index, -1)}
-                        className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
-                      >
-                        <ChevronUp size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={isSource ? `整源下移 ${row.item.label}` : '下移'}
-                        disabled={row.index === items.length - 1}
-                        onClick={() => move(row.index, 1)}
-                        className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
-                      >
-                        <ChevronDown size={13} />
-                      </button>
-                    </div>
-                  </div>
-                  {isRenaming && (
-                    <div className="mt-2 flex items-center gap-1.5 pl-8">
-                      <input
-                        className="input mono h-8 flex-1 text-[0.75rem]"
-                        placeholder={row.node?.outputName ?? '留空恢复自动命名'}
-                        value={customName}
-                        onChange={(e) => onOverrides({ ...overrides, [nodeId]: e.target.value })}
-                        autoFocus
-                      />
-                      {customName && (
                         <button
                           type="button"
-                          onClick={() => {
-                            const next = { ...overrides }
-                            delete next[nodeId]
-                            onOverrides(next)
-                          }}
+                          aria-label="下移"
+                          disabled={rowIdx === rows.length - 1}
+                          onClick={() => moveRow(rowIdx, 1)}
+                          className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+                        >
+                          <ChevronDown size={13} />
+                        </button>
+                      </div>
+                    </li>
+                  )
+                }
+                const isSource = row.item.kind === 'source'
+                if (!isSource) seq += 1
+                const nodeId = row.node?.nodeId ?? row.item.refId
+                const isRenaming = !isSource && renamingId === nodeId
+                const customName = !isSource ? (overrides[nodeId] ?? '') : ''
+                return (
+                  <li
+                    key={`${row.item.kind}-${row.item.refId}`}
+                    onPointerDown={(e) => startPress(e, rowIdx)}
+                    className={`px-2.5 py-2 transition-colors ${isSource ? 'bg-surface/40' : ''} ${
+                      isDragging ? 'bg-raised/90 ring-1 ring-accent/50' : ''
+                    } ${dropRing}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        onPointerDown={(e) => {
+                          e.stopPropagation()
+                          startPress(e, rowIdx, true)
+                        }}
+                        className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center text-fg-subtle hover:text-fg active:cursor-grabbing"
+                        title="拖动排序"
+                      >
+                        <GripVertical size={13} />
+                      </span>
+                      {isSource ? (
+                        <Layers3 size={13} className="shrink-0 text-accent" />
+                      ) : (
+                        <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
+                          {String(seq).padStart(2, '0')}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className={`truncate ${isSource ? 'text-strong font-medium text-fg' : 'mono text-[0.75rem] text-fg-soft'}`}>
+                          {isSource ? row.item.label : row.node?.rawName}
+                        </div>
+                        {!isSource && (
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            <span className="mono truncate text-[0.75rem] text-accent-strong/90">
+                              {customName || row.node?.outputName}
+                            </span>
+                            {customName && <Badge tone="cyan">自定义</Badge>}
+                            {row.node && duplicates.includes(row.node.outputName) && !customName && <Badge tone="amber">重名</Badge>}
+                          </div>
+                        )}
+                      </div>
+                      {isSource && <Badge tone="cyan">整源 {row.item.nodeCount || ''}</Badge>}
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {!isSource && (
+                          <button
+                            type="button"
+                            aria-label="自定义节点名称"
+                            title="自定义节点名称"
+                            onClick={() => setRenamingId(isRenaming ? null : nodeId)}
+                            className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${
+                              isRenaming || customName
+                                ? 'bg-accent/15 text-accent'
+                                : 'text-fg-subtle hover:bg-raised hover:text-fg'
+                            }`}
+                          >
+                            <Pencil size={12} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={isSource ? `整源上移 ${row.item.label}` : '上移'}
+                          disabled={rowIdx === 0}
+                          onClick={() => moveRow(rowIdx, -1)}
+                          className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+                        >
+                          <ChevronUp size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={isSource ? `整源下移 ${row.item.label}` : '下移'}
+                          disabled={rowIdx === rows.length - 1}
+                          onClick={() => moveRow(rowIdx, 1)}
+                          className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+                        >
+                          <ChevronDown size={13} />
+                        </button>
+                      </div>
+                    </div>
+                    {isRenaming && (
+                      <div className="mt-2 flex items-center gap-1.5 pl-8">
+                        <input
+                          className="input mono h-8 flex-1 text-[0.75rem]"
+                          placeholder={row.node?.outputName ?? '留空恢复自动命名'}
+                          value={customName}
+                          onChange={(e) => onOverrides({ ...overrides, [nodeId]: e.target.value })}
+                          autoFocus
+                        />
+                        {customName && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = { ...overrides }
+                              delete next[nodeId]
+                              onOverrides(next)
+                            }}
+                            className="btn btn-ghost h-8 px-2 text-[0.6875rem]"
+                            title="恢复自动命名"
+                          >
+                            恢复默认
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setRenamingId(null)}
                           className="btn btn-ghost h-8 px-2 text-[0.6875rem]"
-                          title="恢复自动命名"
                         >
-                          恢复默认
+                          完成
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setRenamingId(null)}
-                        className="btn btn-ghost h-8 px-2 text-[0.6875rem]"
-                      >
-                        完成
-                      </button>
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </>
         )}
         <div className="flex items-center justify-end">
           <button type="button" className="btn btn-primary" onClick={onSave}>
