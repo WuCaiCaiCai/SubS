@@ -130,3 +130,46 @@ func TestAutoRefreshPassAndBackoff(t *testing.T) {
 		t.Fatalf("expected 3rd fetch after backoff, got %d", fetchCalls["https://example.com/a1"])
 	}
 }
+
+func TestAirportRefreshAutoDeletesDisappearedNodes(t *testing.T) {
+	c, s := newAPI(t)
+
+	subRound1 := "vless://11111111-1111-1111-1111-111111111111@hk.example.com:443?security=tls&sni=hk.example.com#HK-01\n" +
+		"vless://22222222-2222-2222-2222-222222222222@jp.example.com:443?security=tls&sni=jp.example.com#JP-01\n"
+	subRound2 := "vless://11111111-1111-1111-1111-111111111111@hk.example.com:443?security=tls&sni=hk.example.com#HK-01\n"
+
+	currentSub := subRound1
+	s.FetchAirport = func(_ context.Context, _ string) ([]byte, error) {
+		return []byte(currentSub), nil
+	}
+
+	c.do(http.MethodPost, "/api/airports", map[string]any{
+		"name": "ap",
+		"url":  "https://example.com/sub",
+	}, nil, http.StatusCreated)
+	c.do(http.MethodPost, "/api/airports/1/refresh", nil, nil, http.StatusOK)
+
+	// 第二轮上游移除 JP-01，刷新应自动删除而不是保留 missing=1。
+	currentSub = subRound2
+	raw := c.do(http.MethodPost, "/api/airports/1/refresh", nil, nil, http.StatusOK)
+	var stats struct {
+		Matched int `json:"matched"`
+		Missing int `json:"missing"`
+	}
+	if err := json.Unmarshal(raw, &stats); err != nil {
+		t.Fatal(err)
+	}
+	if stats.Matched != 1 || stats.Missing != 1 {
+		t.Fatalf("expected matched=1 missing=1, got %+v", stats)
+	}
+
+	nodesRaw := c.do(http.MethodGet, "/api/nodes", nil, nil, http.StatusOK)
+	var nodes []nodeView
+	if err := json.Unmarshal(nodesRaw, &nodes); err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].RawName != "HK-01" {
+		t.Fatalf("expected only HK-01 left, got %+v", nodes)
+	}
+}
+

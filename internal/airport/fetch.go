@@ -39,7 +39,7 @@ func Fetch(ctx context.Context, rawURL string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("无法构造请求")
 	}
-	req.Header.Set("User-Agent", "subs/1.0 (self-hosted)")
+	req.Header.Set("User-Agent", "clash.meta")
 	client := &http.Client{
 		Timeout: 25 * time.Second,
 		CheckRedirect: func(next *http.Request, via []*http.Request) error {
@@ -123,7 +123,7 @@ type RefreshStats struct {
 
 // Merge upserts parsed nodes for an airport inside a single transaction.
 // Existing fingerprints are updated, new ones inserted as is_new=1, and nodes
-// that disappeared this round are flagged missing=1 (config preserved).
+// that disappeared this round are removed (along with stale profile_item refs).
 func Merge(ctx context.Context, tx *sql.Tx, airportID int64, parsed []protocol.Parsed) (RefreshStats, error) {
 	stats := RefreshStats{Errors: []protocol.ParseError{}}
 	rows, err := tx.QueryContext(ctx,
@@ -185,6 +185,18 @@ func Merge(ctx context.Context, tx *sql.Tx, airportID int64, parsed []protocol.P
 		return stats, err
 	}
 	stats.Missing = missing
+
+	if missing > 0 {
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM profile_item WHERE kind='node' AND ref_id IN
+			 (SELECT id FROM node WHERE source_type='airport' AND source_id=? AND missing=1)`, airportID); err != nil {
+			return stats, err
+		}
+		if _, err := tx.ExecContext(ctx,
+			"DELETE FROM node WHERE source_type='airport' AND source_id=? AND missing=1", airportID); err != nil {
+			return stats, err
+		}
+	}
 
 	var total int
 	if err := tx.QueryRowContext(ctx,

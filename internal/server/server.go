@@ -119,6 +119,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/nodes", s.csrf(s.createNode))
 		r.Post("/api/nodes/import", s.csrf(s.importNodes))
 		r.Post("/api/nodes/confirm-new", s.csrf(s.confirmAllNew))
+		r.Delete("/api/nodes/missing", s.csrf(s.clearMissingNodes))
 		r.Get("/api/nodes/{id}", s.getNode)
 		r.Put("/api/nodes/{id}", s.csrf(s.updateNode))
 		r.Delete("/api/nodes/{id}", s.csrf(s.deleteNode))

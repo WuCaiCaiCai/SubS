@@ -77,7 +77,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
     if (filters.sourceId) p.set('sourceId', String(filters.sourceId))
     if (filters.protocol) p.set('protocol', filters.protocol)
     if (filters.isNew) p.set('isNew', 'true')
-    if (filters.missing) p.set('missing', 'true')
+    p.set('missing', filters.missing ? 'true' : 'false')
     if (filters.q) p.set('q', filters.q)
     const s = p.toString()
     return s ? `?${s}` : ''
@@ -99,6 +99,17 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
       reloadAll()
     } catch (err) {
       toast('error', err instanceof ApiError ? err.message : '操作失败')
+    }
+  }
+
+  const clearMissing = async () => {
+    try {
+      const res = await api.del<{ deleted: number }>('/api/nodes/missing')
+      toast('success', `已清理 ${res.deleted} 个缺失节点`)
+      setFilters({ ...filters, missing: undefined })
+      reloadAll()
+    } catch (err) {
+      toast('error', err instanceof ApiError ? err.message : '清理失败')
     }
   }
 
@@ -201,6 +212,11 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {filters.missing && (nodes.data ?? []).length > 0 && (
+            <button type="button" className="btn btn-danger" onClick={clearMissing}>
+              <Trash2 size={14} /> 清空缺失节点
+            </button>
+          )}
           {(nodes.data ?? []).some((n) => n.isNew) && (
             <button type="button" className="btn btn-ghost" onClick={confirmNew}>
               <Check size={14} /> 确认新节点

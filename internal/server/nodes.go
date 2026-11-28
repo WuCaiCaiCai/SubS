@@ -353,4 +353,26 @@ func (s *Server) confirmAllNew(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"confirmed": n})
 }
 
+// clearMissingNodes 清理历史残留的缺失节点及其编排引用。
+func (s *Server) clearMissingNodes(w http.ResponseWriter, r *http.Request) {
+	var deleted int64
+	err := s.Store.Write(r.Context(), func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(r.Context(),
+			"DELETE FROM profile_item WHERE kind='node' AND ref_id IN (SELECT id FROM node WHERE missing=1)"); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(r.Context(), "DELETE FROM node WHERE missing=1")
+		if err != nil {
+			return err
+		}
+		deleted, _ = res.RowsAffected()
+		return nil
+	})
+	if err != nil {
+		fail(w, 500, "database_error", "清理缺失节点失败")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"deleted": deleted})
+}
+
 var _ = errors.Is
