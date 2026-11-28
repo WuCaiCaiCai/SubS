@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Lock, Save, Settings2, ShieldCheck, Terminal } from 'lucide-react'
+import { Lock, Save, Settings2, ShieldCheck, Terminal, Trash2 } from 'lucide-react'
 import { api, ApiError, type SystemInfo } from '../lib/api'
 import { toast, useAsync } from '../lib/hooks'
 import { Badge, ErrorNote, SectionLabel, SkeletonRows, Spinner, Switch } from '../components/ui'
 
-export function SettingsPage() {
+export function SettingsPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   const system = useAsync(() => api.get<SystemInfo>('/api/system'))
   const [name, setName] = useState('')
   const [externalUrl, setExternalUrl] = useState('')
@@ -169,6 +169,23 @@ export function SettingsPage() {
             <dd className="text-fg-soft">无</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="card border-danger/30 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Trash2 size={14} className="text-danger" />
+              <h2 className="text-[0.8125rem] font-semibold text-danger">危险操作</h2>
+            </div>
+            <p className="mt-1 text-[0.75rem] text-fg-muted">
+              彻底擦除当前实例的数据库、主密钥、备份与全部订阅链接。
+            </p>
+          </div>
+          <button type="button" className="btn btn-danger" onClick={() => onNavigate('/destroy')}>
+            <Trash2 size={14} /> 销毁实例…
+          </button>
+        </div>
       </section>
     </div>
   )

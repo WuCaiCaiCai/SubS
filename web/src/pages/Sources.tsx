@@ -19,6 +19,7 @@ import {
   SectionLabel,
   SkeletonRows,
   Spinner,
+  Switch,
 } from '../components/ui'
 
 type Tab = 'airport' | 'server'
@@ -32,6 +33,7 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
   const [airportModal, setAirportModal] = useState<{ mode: 'create' } | { mode: 'edit'; airport: Airport } | null>(null)
   const [serverModal, setServerModal] = useState<{ mode: 'create' } | { mode: 'edit'; server: VpsServer } | null>(null)
   const [refreshing, setRefreshing] = useState<number | null>(null)
+  const [refreshingAll, setRefreshingAll] = useState(false)
   const [refreshResult, setRefreshResult] = useState<{ airport: Airport; stats: RefreshStats } | null>(null)
 
   const refresh = async (airport: Airport) => {
@@ -44,6 +46,49 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
       toast('error', err instanceof ApiError ? err.message : '刷新失败')
     } finally {
       setRefreshing(null)
+    }
+  }
+
+  const refreshAll = async () => {
+    const list = (airports.data ?? []).filter((a) => a.enabled)
+    if (list.length === 0) {
+      toast('info', '没有启用中的机场')
+      return
+    }
+    setRefreshingAll(true)
+    let ok = 0
+    let failed = 0
+    for (const a of list) {
+      try {
+        await api.post<RefreshStats>(`/api/airports/${a.id}/refresh`)
+        ok++
+      } catch {
+        failed++
+      }
+    }
+    airports.reload()
+    setRefreshingAll(false)
+    if (failed === 0) {
+      toast('success', `已刷新 ${ok} 个机场`)
+    } else {
+      toast('warning', `刷新完成：${ok} 成功，${failed} 失败`)
+    }
+  }
+
+  const toggleAirportEnabled = async (airport: Airport, next: boolean) => {
+    airports.setData((list) => list?.map((a) => (a.id === airport.id ? { ...a, enabled: next } : a)))
+    try {
+      const saved = await api.put<Airport>(`/api/airports/${airport.id}`, {
+        name: airport.name,
+        note: airport.note,
+        enabled: next,
+        refreshIntervalMin: airport.refreshIntervalMin,
+      })
+      airports.setData((list) => list?.map((a) => (a.id === airport.id ? saved : a)))
+      toast('success', next ? '机场已启用' : '机场已停用')
+    } catch (err) {
+      airports.setData((list) => list?.map((a) => (a.id === airport.id ? { ...a, enabled: !next } : a)))
+      toast('error', err instanceof ApiError ? err.message : '更新状态失败')
     }
   }
 
@@ -125,13 +170,26 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
             机场订阅与自建 VPS 是两类平级来源，节点都会汇入节点库。
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => (tab === 'airport' ? setAirportModal({ mode: 'create' }) : setServerModal({ mode: 'create' }))}
-        >
-          <Plus size={14} /> {tab === 'airport' ? '添加机场' : '添加 VPS'}
-        </button>
+        <div className="flex items-center gap-2">
+          {tab === 'airport' && (airports.data?.length ?? 0) > 0 && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={refreshAll}
+              disabled={refreshingAll || refreshing !== null}
+            >
+              {refreshingAll ? <Spinner /> : <RefreshCw size={14} />}
+              <span>全部刷新</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => (tab === 'airport' ? setAirportModal({ mode: 'create' }) : setServerModal({ mode: 'create' }))}
+          >
+            <Plus size={14} /> {tab === 'airport' ? '添加机场' : '添加 VPS'}
+          </button>
+        </div>
       </header>
 
       <div role="tablist" aria-label="来源类型" className="flex gap-1 rounded-lg border border-line bg-surface/50 p-1">
@@ -187,9 +245,22 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
                         {!a.enabled && <Badge tone="neutral">停用</Badge>}
                       </div>
                       <div className="mono mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.6875rem] text-fg-muted">
-                        <span>{a.nodeCount} 节点</span>
+                        <button
+                          type="button"
+                          onClick={() => onNavigate(`/nodes?sourceType=airport&sourceId=${a.id}`)}
+                          className="hover:text-accent hover:underline"
+                          title="查看该机场节点"
+                        >
+                          {a.nodeCount} 节点
+                        </button>
                         <span className="text-fg-subtle">·</span>
                         <span title={a.lastOkAt || ''}>更新 {relativeTime(a.lastOkAt)}</span>
+                        {a.refreshIntervalMin != null && a.refreshIntervalMin > 0 && (
+                          <>
+                            <span className="text-fg-subtle">·</span>
+                            <span>{formatIntervalLabel(a.refreshIntervalMin)}</span>
+                          </>
+                        )}
                         {a.lastError && (
                           <>
                             <span className="text-fg-subtle">·</span>
@@ -216,6 +287,13 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
                       <IconButton label="删除" danger onClick={() => removeAirport(a)}>
                         <Trash2 size={14} />
                       </IconButton>
+                      <div className="ml-1 border-l border-line pl-2">
+                        <Switch
+                          checked={a.enabled}
+                          onChange={(next) => toggleAirportEnabled(a, next)}
+                          label={a.enabled ? '停用机场' : '启用机场'}
+                        />
+                      </div>
                     </div>
                   </div>
                 </li>
@@ -258,7 +336,14 @@ export function SourcesPage({ onNavigate }: { onNavigate: (path: string) => void
                       <div className="mono mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.6875rem] text-fg-muted">
                         {v.address && <span className="truncate">{v.address}</span>}
                         {v.address && <span className="text-fg-subtle">·</span>}
-                        <span>{v.nodeCount} 节点</span>
+                        <button
+                          type="button"
+                          onClick={() => onNavigate(`/nodes?sourceType=server&sourceId=${v.id}`)}
+                          className="hover:text-accent hover:underline"
+                          title="查看该 VPS 节点"
+                        >
+                          {v.nodeCount} 节点
+                        </button>
                         {v.note && (
                           <>
                             <span className="text-fg-subtle">·</span>
@@ -394,6 +479,18 @@ function IconButton({
   )
 }
 
+const REFRESH_PRESETS: { value: number; label: string }[] = [
+  { value: 60, label: '每 1 小时' },
+  { value: 360, label: '每 6 小时（推荐）' },
+  { value: 720, label: '每 12 小时' },
+  { value: 1440, label: '每 24 小时' },
+]
+
+function formatIntervalLabel(minutes: number): string {
+  if (minutes % 60 === 0) return `每 ${minutes / 60} 小时自动`
+  return `每 ${minutes} 分钟自动`
+}
+
 function AirportForm({
   state,
   onClose,
@@ -408,6 +505,7 @@ function AirportForm({
   const [url, setUrl] = useState('')
   const [note, setNote] = useState('')
   const [enabled, setEnabled] = useState(true)
+  const [refreshIntervalMin, setRefreshIntervalMin] = useState<number | null>(360)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -417,6 +515,7 @@ function AirportForm({
     setUrl(editing?.url ?? '')
     setNote(editing?.note ?? '')
     setEnabled(editing?.enabled ?? true)
+    setRefreshIntervalMin(editing ? editing.refreshIntervalMin : 360)
     setError('')
   }, [state, editing])
 
@@ -426,10 +525,10 @@ function AirportForm({
     setBusy(true)
     try {
       if (editing) {
-        await api.put(`/api/airports/${editing.id}`, { name, url, note, enabled })
+        await api.put(`/api/airports/${editing.id}`, { name, url, note, enabled, refreshIntervalMin })
         toast('success', '机场已更新')
       } else {
-        const created = await api.post<Airport>('/api/airports', { name, url, note })
+        const created = await api.post<Airport>('/api/airports', { name, url, note, refreshIntervalMin })
         toast('success', '机场已创建，正在拉取节点…')
         try {
           const stats = await api.post<RefreshStats>(`/api/airports/${created.id}/refresh`)
@@ -480,6 +579,27 @@ function AirportForm({
           />
           <span className="block text-[0.7188rem] text-fg-muted">
             {editing?.url?.includes('***') ? '留空或保留遮蔽值表示不修改链接' : '地址含凭据，将加密存储'}
+          </span>
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-[0.75rem] font-medium text-fg-soft">自动更新间隔</span>
+          <select
+            className="input"
+            value={refreshIntervalMin ?? ''}
+            onChange={(e) => setRefreshIntervalMin(e.target.value === '' ? null : Number(e.target.value))}
+          >
+            <option value="">仅手动刷新</option>
+            {REFRESH_PRESETS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+            {refreshIntervalMin != null && !REFRESH_PRESETS.some((opt) => opt.value === refreshIntervalMin) && (
+              <option value={refreshIntervalMin}>每 {refreshIntervalMin} 分钟</option>
+            )}
+          </select>
+          <span className="block text-[0.7188rem] text-fg-muted">
+            启用中的机场会按此间隔在后台自动拉取最新节点，一般建议每 6 小时或 12 小时。
           </span>
         </label>
         <label className="block space-y-1.5">

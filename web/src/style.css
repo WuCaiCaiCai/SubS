@@ -111,7 +111,7 @@
   }
 
   html {
-    font-size: 18px;
+    font-size: 16px;
     -webkit-text-size-adjust: 100%;
   }
 
@@ -188,7 +188,7 @@
   }
 
   .input {
-    @apply h-12 w-full rounded-lg border border-line bg-canvas px-3 text-strong text-fg
+    @apply h-10 w-full rounded-lg border border-line bg-canvas px-3 text-strong text-fg
       placeholder:text-fg-subtle transition-colors
       hover:border-line-strong
       focus:border-accent focus:ring-2 focus:ring-accent/25 focus:outline-none
@@ -196,7 +196,7 @@
   }
 
   .btn {
-    @apply inline-flex h-12 items-center justify-center gap-2 rounded-lg border px-4 text-strong
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3.5 text-strong
       font-medium transition-all duration-150 active:scale-[0.99]
       disabled:cursor-not-allowed disabled:opacity-45;
   }

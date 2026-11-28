@@ -3,12 +3,11 @@ import {
   Activity,
   Boxes,
   DatabaseBackup,
+  FileCode2,
   Layers3,
   LogOut,
   Settings2,
   ShieldCheck,
-  Trash2,
-  TriangleAlert,
 } from 'lucide-react'
 import { api, setCsrfToken, type Me } from './lib/api'
 import { toast } from './lib/hooks'
@@ -44,10 +43,9 @@ const NAV = [
 ] as const
 
 const SECONDARY = [
-  { name: 'templates', label: '模板', icon: Layers3, path: '/templates' },
+  { name: 'templates', label: '模板', icon: FileCode2, path: '/templates' },
   { name: 'backup', label: '备份', icon: DatabaseBackup, path: '/backup' },
   { name: 'settings', label: '设置', icon: Settings2, path: '/settings' },
-  { name: 'destroy', label: '销毁', icon: Trash2, path: '/destroy' },
 ] as const
 
 function parseRoute(path: string): Route {
@@ -137,7 +135,7 @@ export function App() {
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 hidden w-56 flex-col border-r border-line bg-canvas md:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-52 flex-col border-r border-line bg-canvas md:flex">
         <div className="flex items-center gap-2 px-4 py-4">
           <div className="flex h-7 w-7 items-center justify-center rounded border border-accent/30 bg-accent/10 font-mono text-[0.8125rem] font-semibold text-accent">
             S
@@ -164,11 +162,10 @@ export function App() {
           {SECONDARY.map((item) => (
             <NavButton
               key={item.name}
-              active={route.name === item.name}
+              active={route.name === item.name || (item.name === 'settings' && route.name === 'destroy')}
               icon={<item.icon size={16} />}
               label={item.label}
               onClick={() => go(item.path)}
-              danger={item.name === 'destroy'}
             />
           ))}
         </nav>
@@ -203,13 +200,38 @@ export function App() {
           </div>
           <span className="text-[0.8125rem] font-semibold">SubS</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <ThemeToggle compact />
+          <button
+            type="button"
+            onClick={() => go('/templates')}
+            aria-label="模板"
+            title="模板"
+            className={`flex h-9 w-9 items-center justify-center rounded hover:bg-raised ${
+              route.name === 'templates' ? 'text-accent' : 'text-fg-muted'
+            }`}
+          >
+            <FileCode2 size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => go('/backup')}
+            aria-label="备份"
+            title="备份"
+            className={`flex h-9 w-9 items-center justify-center rounded hover:bg-raised ${
+              route.name === 'backup' ? 'text-accent' : 'text-fg-muted'
+            }`}
+          >
+            <DatabaseBackup size={16} />
+          </button>
           <button
             type="button"
             onClick={() => go('/settings')}
             aria-label="设置"
-            className="flex h-9 w-9 items-center justify-center rounded text-fg-muted hover:bg-raised"
+            title="设置"
+            className={`flex h-9 w-9 items-center justify-center rounded hover:bg-raised ${
+              route.name === 'settings' || route.name === 'destroy' ? 'text-accent' : 'text-fg-muted'
+            }`}
           >
             <Settings2 size={16} />
           </button>
@@ -217,6 +239,7 @@ export function App() {
             type="button"
             onClick={logout}
             aria-label="退出登录"
+            title="退出登录"
             className="flex h-9 w-9 items-center justify-center rounded text-fg-muted hover:bg-raised"
           >
             <LogOut size={16} />
@@ -226,7 +249,7 @@ export function App() {
 
       <main
         id="main"
-        className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 md:pb-12 md:pl-64 md:pr-6 md:pt-8"
+        className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 md:pb-12 md:pl-60 md:pr-6 md:pt-7"
       >
         {route.name === 'dashboard' && <DashboardPage onNavigate={go} />}
         {route.name === 'sources' && <SourcesPage onNavigate={go} />}
@@ -234,7 +257,7 @@ export function App() {
         {route.name === 'profiles' && <ProfilesPage onNavigate={go} />}
         {route.name === 'profile' && <ProfileEditorPage profileId={route.id} onNavigate={go} />}
         {route.name === 'templates' && <TemplatesPage />}
-        {route.name === 'settings' && <SettingsPage />}
+        {route.name === 'settings' && <SettingsPage onNavigate={go} />}
         {route.name === 'backup' && <BackupPage />}
         {route.name === 'destroy' && <DestroyPage onNavigate={go} />}
       </main>
@@ -302,5 +325,3 @@ function NavButton({
     </button>
   )
 }
-
-export { TriangleAlert }

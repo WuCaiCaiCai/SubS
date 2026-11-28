@@ -63,6 +63,7 @@ export function ProfileEditorPage({
   const [profileNodes, setProfileNodes] = useState<ProfileNode[]>([])
   const [duplicates, setDuplicates] = useState<string[]>([])
   const [saved, setSaved] = useState(false)
+  const [dirty, setDirty] = useState(false)
   const [error, setError] = useState('')
 
   const loadNaming = useCallback(async () => {
@@ -90,6 +91,7 @@ export function ProfileEditorPage({
         if (it.kind === 'node' && it.nameOverride) map[it.refId] = it.nameOverride
       }
       setOverrides(map)
+      setDirty(false)
     } catch {
       /* ignore */
     }
@@ -111,6 +113,7 @@ export function ProfileEditorPage({
         })),
       })
       setProfileNodes(res)
+      setDirty(false)
       setSaved(true)
       window.setTimeout(() => setSaved(false), 1800)
       void loadNaming()
@@ -140,11 +143,13 @@ export function ProfileEditorPage({
           <h1 className="mt-1 truncate text-page font-semibold tracking-tight">{p.name}</h1>
         </div>
         <div className="flex items-center gap-2">
-          {saved && (
+          {dirty ? (
+            <span className="text-[0.75rem] text-warning">有未保存更改</span>
+          ) : saved ? (
             <span className="flex items-center gap-1 text-[0.75rem] text-success">
               <Check size={13} /> 已保存
             </span>
-          )}
+          ) : null}
           <ProfileMeta profile={p} />
         </div>
       </header>
@@ -179,7 +184,10 @@ export function ProfileEditorPage({
       {step === 0 && (
         <NodeSelectStep
           items={items}
-          onChange={setItems}
+          onChange={(next) => {
+            setItems(next)
+            setDirty(true)
+          }}
           onNext={async () => {
             const ok = await saveItems(items)
             if (ok) setStep(1)
@@ -194,8 +202,14 @@ export function ProfileEditorPage({
           items={items}
           overrides={overrides}
           duplicates={duplicates}
-          onOverrides={setOverrides}
-          onReorder={setItems}
+          onOverrides={(next) => {
+            setOverrides(next)
+            setDirty(true)
+          }}
+          onReorder={(next) => {
+            setItems(next)
+            setDirty(true)
+          }}
           onRuleSaved={() => {
             profile.reload()
             void loadNaming()
