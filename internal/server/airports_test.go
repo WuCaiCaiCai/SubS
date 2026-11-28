@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -170,6 +172,57 @@ func TestAirportRefreshAutoDeletesDisappearedNodes(t *testing.T) {
 	}
 	if len(nodes) != 1 || nodes[0].RawName != "HK-01" || nodes[0].IsNew {
 		t.Fatalf("expected only HK-01 (isNew=false) left, got %+v", nodes)
+	}
+}
+
+func TestSubscriptionOutputFollowsReorderedNodes(t *testing.T) {
+	c, s := newAPI(t)
+	s.FetchAirport = func(_ context.Context, _ string) ([]byte, error) {
+		return []byte(
+			"vless://11111111-1111-1111-1111-111111111111@hk.example.com:443?security=tls&sni=hk.example.com#HK-01\n" +
+				"vless://22222222-2222-2222-2222-222222222222@jp.example.com:443?security=tls&sni=jp.example.com#JP-01\n",
+		), nil
+	}
+	c.do(http.MethodPost, "/api/airports", map[string]any{"name": "ap", "url": "https://example.com/sub"}, nil, http.StatusCreated)
+	c.do(http.MethodPost, "/api/airports/1/refresh", nil, nil, http.StatusOK)
+
+	rawTpl := c.do(http.MethodPost, "/api/templates", map[string]any{
+		"name":    "tpl",
+		"content": "proxies: []\nproxy-groups:\n  - name: PROXY\n    type: select\n    proxies:\n      # subs:nodes\nrules:\n  - MATCH,PROXY\n",
+	}, nil, http.StatusCreated)
+	var tpl struct{ ID int64 }
+	_ = json.Unmarshal(rawTpl, &tpl)
+
+	rawProf := c.do(http.MethodPost, "/api/profiles", map[string]any{
+		"name":       "p1",
+		"templateId": tpl.ID,
+		"namingRule": map[string]any{"segments": []string{"rawName"}, "separator": "-", "zeroPad": 2, "upperProtocol": true},
+	}, nil, http.StatusCreated)
+	var prof struct {
+		ID    int64
+		Token string
+	}
+	_ = json.Unmarshal(rawProf, &prof)
+
+	// 按逆序保存节点（JP-01 在前，HK-01 在后）
+	c.do(http.MethodPut, "/api/profiles/1/nodes", map[string]any{
+		"items": []map[string]any{
+			{"kind": "node", "refId": 2},
+			{"kind": "node", "refId": 1},
+		},
+	}, nil, http.StatusOK)
+
+	req := httptest.NewRequest(http.MethodGet, "/s/"+prof.Token+"?target=mihomo", nil)
+	w := httptest.NewRecorder()
+	s.Router().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	jpPos := strings.Index(body, "JP 01")
+	hkPos := strings.Index(body, "HK 01")
+	if jpPos < 0 || hkPos < 0 || jpPos > hkPos {
+		t.Fatalf("expected JP-01 before HK-01 in subscription output, got:\n%s", body)
 	}
 }
 
