@@ -91,6 +91,29 @@ func TestRenderMihomoFieldMapping(t *testing.T) {
 	}
 }
 
+func TestRenderMihomoKeepsFlagEmojiUnescaped(t *testing.T) {
+	nodes := []Node{{
+		Name: "🇭🇰-HKG 01",
+		Config: protocol.Config{
+			Protocol:  "vless",
+			Host:      "hk.example.com",
+			Port:      443,
+			Auth:      map[string]any{"uuid": "11111111-1111-1111-1111-111111111111"},
+			Transport: map[string]any{"security": "tls", "sni": "hk.example.com"},
+		},
+	}}
+	res, err := Render(TargetMihomo, "", nodes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Body, "🇭🇰-HKG 01") {
+		t.Fatalf("expected raw flag emoji in YAML, got:\n%s", res.Body)
+	}
+	if strings.Contains(res.Body, `\U0001F1`) {
+		t.Fatalf("unexpected escaped unicode in YAML:\n%s", res.Body)
+	}
+}
+
 func TestRenderMihomoMarkerInjection(t *testing.T) {
 	tmpl := `port: 7890
 # subs:proxies

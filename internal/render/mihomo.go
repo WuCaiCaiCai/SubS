@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
@@ -329,7 +330,7 @@ func renderMihomo(template string, nodes []Node) (Result, error) {
 	if err := enc.Close(); err != nil {
 		return Result{}, fmt.Errorf("生成 YAML 失败")
 	}
-	out := buf.Bytes()
+	out := unescapeYAMLUnicode(buf.Bytes())
 	var check yaml.Node
 	if err := yaml.Unmarshal(out, &check); err != nil {
 		return Result{}, fmt.Errorf("生成的 YAML 无法重新解析")
@@ -339,6 +340,34 @@ func renderMihomo(template string, nodes []Node) (Result, error) {
 		res.Body = fmt.Sprintf("# 已跳过节点（当前客户端不支持）: %s\n%s", strings.Join(skipped, ", "), res.Body)
 	}
 	return res, nil
+}
+
+// unescapeYAMLUnicode restores supplementary-plane characters (like flag emoji)
+// that yaml.v3 escapes as \U0001Fxxx inside double-quoted strings.
+func unescapeYAMLUnicode(b []byte) []byte {
+	var out bytes.Buffer
+	out.Grow(len(b))
+	for i := 0; i < len(b); {
+		if b[i] == '\\' && i+10 <= len(b) && b[i+1] == 'U' {
+			bs := 0
+			for j := i - 1; j >= 0 && b[j] == '\\'; j-- {
+				bs++
+			}
+			if bs%2 == 0 {
+				if v, err := strconv.ParseUint(string(b[i+2:i+10]), 16, 32); err == nil {
+					r := rune(v)
+					if r >= 0x10000 && r <= 0x10FFFF && utf8.ValidRune(r) {
+						out.WriteRune(r)
+						i += 10
+						continue
+					}
+				}
+			}
+		}
+		out.WriteByte(b[i])
+		i++
+	}
+	return out.Bytes()
 }
 
 // markerSet reports which subs markers annotate a mapping key.
