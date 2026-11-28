@@ -88,6 +88,11 @@ func ParseLine(line string) (Result, error) {
 		return Result{}, err
 	}
 	if name == "" {
+		if extraName, ok := cfg.Extra["name"].(string); ok && strings.TrimSpace(extraName) != "" {
+			name = strings.TrimSpace(extraName)
+		}
+	}
+	if name == "" {
 		name = cfg.Host
 	}
 	return Result{Name: name, Config: cfg}, nil

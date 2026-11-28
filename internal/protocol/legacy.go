@@ -81,18 +81,20 @@ func parseVMess(u *url.URL) (Config, error) {
 		return Config{}, fmt.Errorf("VMess 链接编码无效")
 	}
 	var v struct {
-		Add  string          `json:"add"`
-		Port json.RawMessage `json:"port"`
-		ID   string          `json:"id"`
-		Aid  json.RawMessage `json:"aid"`
-		Net  string          `json:"net"`
-		Type string          `json:"type"`
-		Host string          `json:"host"`
-		Path string          `json:"path"`
-		TLS  string          `json:"tls"`
-		SNI  string          `json:"sni"`
-		Scy  string          `json:"scy"`
-		Ps   string          `json:"ps"`
+		Add           string          `json:"add"`
+		Port          json.RawMessage `json:"port"`
+		ID            string          `json:"id"`
+		Aid           json.RawMessage `json:"aid"`
+		Net           string          `json:"net"`
+		Type          string          `json:"type"`
+		Host          string          `json:"host"`
+		Path          string          `json:"path"`
+		TLS           string          `json:"tls"`
+		SNI           string          `json:"sni"`
+		Fp            string          `json:"fp"`
+		AllowInsecure json.RawMessage `json:"allowInsecure"`
+		Scy           string          `json:"scy"`
+		Ps            string          `json:"ps"`
 	}
 	if json.Unmarshal(payload, &v) != nil || v.Add == "" || v.ID == "" {
 		return Config{}, fmt.Errorf("VMess 配置缺少必要字段")
@@ -114,5 +116,35 @@ func parseVMess(u *url.URL) (Config, error) {
 		_ = json.Unmarshal(v.Aid, &s)
 		aid, _ = strconv.Atoi(s)
 	}
-	return Config{Protocol: "vmess", Host: v.Add, Port: p, Auth: map[string]any{"uuid": v.ID, "alterId": aid, "cipher": firstNonEmpty(v.Scy, "auto")}, Transport: map[string]any{"security": strings.ToLower(v.TLS), "sni": firstNonEmpty(v.SNI, v.Host), "network": firstNonEmpty(v.Net, "tcp"), "wsHost": v.Host, "wsPath": v.Path, "grpcService": v.Path, "wsType": v.Type}, Extra: map[string]any{"name": v.Ps}}, nil
+	insecure := false
+	if len(v.AllowInsecure) > 0 {
+		var b bool
+		var n int
+		var s string
+		if json.Unmarshal(v.AllowInsecure, &b) == nil {
+			insecure = b
+		} else if json.Unmarshal(v.AllowInsecure, &n) == nil {
+			insecure = n != 0
+		} else if json.Unmarshal(v.AllowInsecure, &s) == nil {
+			insecure = s == "1" || strings.EqualFold(s, "true")
+		}
+	}
+	return Config{
+		Protocol: "vmess",
+		Host:     v.Add,
+		Port:     p,
+		Auth:     map[string]any{"uuid": v.ID, "alterId": aid, "cipher": firstNonEmpty(v.Scy, "auto")},
+		Transport: map[string]any{
+			"security":    strings.ToLower(v.TLS),
+			"sni":         firstNonEmpty(v.SNI, v.Host),
+			"network":     firstNonEmpty(v.Net, "tcp"),
+			"wsHost":      v.Host,
+			"wsPath":      v.Path,
+			"grpcService": v.Path,
+			"wsType":      v.Type,
+			"fingerprint": v.Fp,
+			"insecure":    insecure,
+		},
+		Extra: map[string]any{"name": v.Ps},
+	}, nil
 }
