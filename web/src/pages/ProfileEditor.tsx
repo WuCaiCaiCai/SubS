@@ -1,4 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   ArrowLeft,
   ArrowRight,
@@ -213,7 +231,7 @@ export function ProfileEditorPage({
           }}
           onReorder={(next) => {
             setItems(next)
-            setDirty(true)
+            void saveItems(next)
           }}
           onRuleSaved={() => {
             profile.reload()
@@ -323,7 +341,34 @@ function NodeSelectStep({
   }
 
   const toggleNode = (n: NodeItem) => {
-    if (covered(n)) return
+    if (covered(n)) {
+      // 整源全选状态下单独取消某条：把该整源拆成其余已启用节点
+      const gk = key(n)
+      const g = groups.find((x) => x.key === gk)
+      if (!g) return
+      const replacement: ProfileItem[] = g.nodes
+        .filter((x) => x.enabled && !x.missing && x.id !== n.id)
+        .map((x, idx) => ({
+          kind: 'node',
+          refId: x.id,
+          sourceType: '',
+          nameOverride: '',
+          sortOrder: items.length + idx,
+          label: x.rawName,
+          protocol: x.protocol,
+          nodeCount: 1,
+        }))
+      const next: ProfileItem[] = []
+      for (const it of items) {
+        if (it.kind === 'source' && `${it.sourceType}:${it.refId}` === gk) {
+          next.push(...replacement)
+        } else {
+          next.push(it)
+        }
+      }
+      onChange(next)
+      return
+    }
     onChange(
       nodeItem(n.id)
         ? items.filter((it) => !(it.kind === 'node' && it.refId === n.id))
@@ -456,7 +501,7 @@ function NodeSelectStep({
                             type="checkbox"
                             aria-label={`选择 ${n.rawName}`}
                             checked={checked}
-                            disabled={locked || n.missing || !n.enabled}
+                            disabled={n.missing || !n.enabled}
                             onChange={() => toggleNode(n)}
                             className="h-4 w-4 shrink-0"
                           />
@@ -560,14 +605,12 @@ function NodeOrderStep({
   }))
   const [savingRule, setSavingRule] = useState(false)
   const [renamingId, setRenamingId] = useState<number | null>(null)
-  const listRef = useRef<HTMLUListElement>(null)
-  const [dragState, setDragState] = useState<{ fromRow: number; overRow: number } | null>(null)
-  const pressRef = useRef<{
-    rowIdx: number
-    startY: number
-    active: boolean
-    timer: number | null
-  } | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   useEffect(() => {
     if (!initialRule) return
@@ -604,8 +647,18 @@ function NodeOrderStep({
     setRule({ ...rule, segments: [...rule.segments, seg] })
   }
 
-  // 展开成展示行：整源一行块头 + 其下节点，单节点各一行；排序只动 items。
-  const rows = useMemo(() => {
+  interface OrderGroup {
+    id: string
+    sourceKey: string
+    sourceType: 'airport' | 'server'
+    sourceId: number
+    label: string
+    isWholeSource: boolean
+    nodes: (ProfileNode & { seq: number })[]
+  }
+
+  // 按来源分组聚合，保证同一机场/VPS 的节点始终在一起不散开。
+  const orderGroups = useMemo(() => {
     const byId = new Map(nodes.map((n) => [n.nodeId, n]))
     const bySource = new Map<string, ProfileNode[]>()
     for (const n of nodes) {
@@ -614,182 +667,115 @@ function NodeOrderStep({
       list.push(n)
       bySource.set(k, list)
     }
-    const out: { type: 'item' | 'child'; item: ProfileItem; node?: ProfileNode; index: number }[] = []
-    items.forEach((it, index) => {
-      if (it.kind === 'node') {
+    const groupsMap = new Map<string, OrderGroup>()
+    const order: string[] = []
+    let seqCount = 0
+
+    const ensureGroup = (sourceType: 'airport' | 'server', sourceId: number, label: string, isWhole: boolean) => {
+      const sk = `${sourceType}:${sourceId}`
+      let g = groupsMap.get(sk)
+      if (!g) {
+        g = {
+          id: `group:${sk}`,
+          sourceKey: sk,
+          sourceType,
+          sourceId,
+          label,
+          isWholeSource: isWhole,
+          nodes: [],
+        }
+        groupsMap.set(sk, g)
+        order.push(sk)
+      } else if (isWhole) {
+        g.isWholeSource = true
+      }
+      return g
+    }
+
+    for (const it of items) {
+      if (it.kind === 'source') {
+        const sk = `${it.sourceType}:${it.refId}`
+        const g = ensureGroup(it.sourceType as 'airport' | 'server', it.refId, it.label, true)
+        for (const n of bySource.get(sk) ?? []) {
+          if (!g.nodes.some((x) => x.nodeId === n.nodeId)) {
+            seqCount += 1
+            g.nodes.push({ ...n, seq: seqCount })
+          }
+        }
+      } else {
         const n = byId.get(it.refId)
-        if (n) out.push({ type: 'item', item: it, node: n, index })
-        return
+        if (!n) continue
+        const g = ensureGroup(n.sourceType, n.sourceId, n.sourceName, false)
+        if (!g.nodes.some((x) => x.nodeId === n.nodeId)) {
+          seqCount += 1
+          g.nodes.push({ ...n, seq: seqCount })
+        }
       }
-      out.push({ type: 'item', item: it, index })
-      for (const n of bySource.get(`${it.sourceType}:${it.refId}`) ?? []) {
-        out.push({ type: 'child', item: it, node: n, index })
-      }
-    })
-    return out
+    }
+    return order.map((sk) => groupsMap.get(sk)!)
   }, [items, nodes])
 
-  const expandSourceInList = useCallback(
-    (list: ProfileItem[], sourceType: string, sourceId: number): ProfileItem[] => {
-      const children = nodes.filter((n) => n.sourceType === sourceType && n.sourceId === sourceId)
-      const expanded: ProfileItem[] = children.map((n, idx) => ({
-        kind: 'node',
-        refId: n.nodeId,
-        sourceType: '',
-        nameOverride: overrides[n.nodeId] ?? '',
-        sortOrder: idx,
-        label: n.rawName,
-        protocol: n.protocol,
-        nodeCount: 1,
-      }))
+  const buildItemsFromGroups = useCallback(
+    (groups: OrderGroup[]): ProfileItem[] => {
       const out: ProfileItem[] = []
-      for (const it of list) {
-        if (it.kind === 'source' && it.sourceType === sourceType && it.refId === sourceId) {
-          out.push(...expanded)
+      for (const g of groups) {
+        if (g.isWholeSource) {
+          out.push({
+            kind: 'source',
+            refId: g.sourceId,
+            sourceType: g.sourceType,
+            nameOverride: '',
+            sortOrder: out.length,
+            label: g.label,
+            protocol: '',
+            nodeCount: g.nodes.length,
+          })
         } else {
-          out.push(it)
+          for (const n of g.nodes) {
+            out.push({
+              kind: 'node',
+              refId: n.nodeId,
+              sourceType: '',
+              nameOverride: overrides[n.nodeId] ?? '',
+              sortOrder: out.length,
+              label: n.rawName,
+              protocol: n.protocol,
+              nodeCount: 1,
+            })
+          }
         }
       }
       return out
     },
-    [nodes, overrides],
+    [overrides],
   )
 
-  const reorderRows = useCallback(
-    (fromRowIdx: number, toRowIdx: number) => {
-      if (fromRowIdx === toRowIdx) return
-      const from = rows[fromRowIdx]
-      const to = rows[toRowIdx]
-      if (!from || !to) return
-
-      // 整源块之间直接调换顺序，不展开
-      if (from.type === 'item' && to.type === 'item' && (from.item.kind !== 'source' || to.item.kind === 'source')) {
-        const next = [...items]
-        const [moved] = next.splice(from.index, 1)
-        next.splice(to.index, 0, moved)
-        onReorder(next)
-        return
-      }
-
-      // 涉及整源内部节点时，先把相关整源展开为独立节点再排序
-      let next = [...items]
-      let expanded = false
-      if (from.type === 'child' || (from.item.kind === 'source' && to.type === 'child')) {
-        next = expandSourceInList(next, from.item.sourceType, from.item.refId)
-        expanded = true
-      }
-      if (to.type === 'child' && !(to.item.sourceType === from.item.sourceType && to.item.refId === from.item.refId)) {
-        next = expandSourceInList(next, to.item.sourceType, to.item.refId)
-        expanded = true
-      }
-
-      const findItemIdx = (r: (typeof rows)[number]) => {
-        if (r.node) {
-          return next.findIndex((it) => it.kind === 'node' && it.refId === r.node!.nodeId)
-        }
-        return next.findIndex((it) => it.kind === r.item.kind && it.refId === r.item.refId && it.sourceType === r.item.sourceType)
-      }
-      const fromIdx = findItemIdx(from)
-      const toIdx = findItemIdx(to)
-      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return
-      const [moved] = next.splice(fromIdx, 1)
-      next.splice(toIdx, 0, moved)
-      if (expanded) {
-        toast('info', '已将该整源展开为独立节点以支持单节点排序')
-      }
-      onReorder(next)
-    },
-    [expandSourceInList, items, onReorder, rows],
-  )
-
-  const moveRow = (rowIdx: number, dir: -1 | 1) => {
-    const target = rowIdx + dir
-    if (target < 0 || target >= rows.length) return
-    reorderRows(rowIdx, target)
+  const moveGroup = (groupIdx: number, dir: -1 | 1) => {
+    const target = groupIdx + dir
+    if (target < 0 || target >= orderGroups.length) return
+    onReorder(buildItemsFromGroups(arrayMove(orderGroups, groupIdx, target)))
   }
 
-  useEffect(() => {
-    const onMove = (e: PointerEvent) => {
-      const p = pressRef.current
-      if (!p) return
-      if (!p.active) {
-        if (Math.abs(e.clientY - p.startY) > 6) {
-          if (p.timer !== null) {
-            window.clearTimeout(p.timer)
-            p.timer = null
-          }
-          if (e.pointerType === 'mouse') {
-            p.active = true
-            setDragState({ fromRow: p.rowIdx, overRow: p.rowIdx })
-          } else {
-            // 触摸模式下未满长按时间就滑动，判定为页面滚动
-            pressRef.current = null
-            return
-          }
-        } else {
-          return
-        }
-      }
-      e.preventDefault()
-      const ul = listRef.current
-      if (!ul) return
-      const children = Array.from(ul.children) as HTMLElement[]
-      let hit = p.rowIdx
-      for (let i = 0; i < children.length; i++) {
-        const rect = children[i].getBoundingClientRect()
-        if (e.clientY <= rect.top + rect.height / 2) {
-          hit = i
-          break
-        }
-        hit = i
-      }
-      setDragState((prev) => (prev ? { ...prev, overRow: hit } : null))
-    }
+  const moveNodeInGroup = (groupIdx: number, fromNodeIdx: number, toNodeIdx: number) => {
+    if (fromNodeIdx === toNodeIdx) return
+    const g = orderGroups[groupIdx]
+    if (!g) return
+    const nextGroups = orderGroups.map((grp, idx) =>
+      idx === groupIdx
+        ? { ...grp, isWholeSource: false, nodes: arrayMove(grp.nodes, fromNodeIdx, toNodeIdx) }
+        : grp,
+    )
+    onReorder(buildItemsFromGroups(nextGroups))
+  }
 
-    const onEnd = () => {
-      const p = pressRef.current
-      if (p?.timer != null) window.clearTimeout(p.timer)
-      pressRef.current = null
-      setDragState((prev) => {
-        if (prev && prev.fromRow !== prev.overRow) {
-          reorderRows(prev.fromRow, prev.overRow)
-        }
-        return null
-      })
+  const handleGroupDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const fromIdx = orderGroups.findIndex((g) => g.id === active.id)
+    const toIdx = orderGroups.findIndex((g) => g.id === over.id)
+    if (fromIdx >= 0 && toIdx >= 0) {
+      onReorder(buildItemsFromGroups(arrayMove(orderGroups, fromIdx, toIdx)))
     }
-
-    window.addEventListener('pointermove', onMove, { passive: false })
-    window.addEventListener('pointerup', onEnd)
-    window.addEventListener('pointercancel', onEnd)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onEnd)
-      window.removeEventListener('pointercancel', onEnd)
-    }
-  }, [reorderRows])
-
-  const startPress = (e: React.PointerEvent, rowIdx: number, immediateMouse = false) => {
-    const target = e.target as HTMLElement | null
-    if (!immediateMouse && target?.closest('button, input, a')) return
-    if (e.button !== 0 && e.pointerType === 'mouse') return
-    if (pressRef.current?.timer != null) window.clearTimeout(pressRef.current.timer)
-
-    if (e.pointerType === 'mouse' && immediateMouse) {
-      pressRef.current = { rowIdx, startY: e.clientY, active: true, timer: null }
-      setDragState({ fromRow: rowIdx, overRow: rowIdx })
-      return
-    }
-    const timer =
-      e.pointerType === 'touch'
-        ? window.setTimeout(() => {
-            if (pressRef.current && pressRef.current.rowIdx === rowIdx) {
-              pressRef.current.active = true
-              setDragState({ fromRow: rowIdx, overRow: rowIdx })
-              navigator.vibrate?.(12)
-            }
-          }, 220)
-        : null
-    pressRef.current = { rowIdx, startY: e.clientY, active: false, timer }
   }
 
   const applyRule = async () => {
@@ -809,204 +795,44 @@ function NodeOrderStep({
     }
   }
 
-  let seq = 0
-
   return (
     <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
-      <div className="space-y-2">
-        {items.length === 0 ? (
+      <div className="space-y-3">
+        {orderGroups.length === 0 ? (
           <EmptyState icon={<ListOrdered size={18} />} title="还没有节点" description="回到第 1 步挑选节点。" />
         ) : (
           <>
             <p className="text-[0.6875rem] text-fg-subtle">
-              拖拽左侧手柄或长按节点行即可调整顺序（手机端长按 0.2 秒后拖动）。
+              可拖动来源卡片调整机场/VPS 顺序，或在卡片内拖动/长按节点调整组内顺序（松手自动保存）。
             </p>
-            <ul
-              ref={listRef}
-              className={`divide-y divide-line/70 overflow-hidden rounded-lg border border-line ${
-                dragState ? 'touch-none select-none' : ''
-              }`}
-            >
-              {rows.map((row, rowIdx) => {
-                const isDragging = dragState?.fromRow === rowIdx
-                const isDropTarget = dragState && dragState.overRow === rowIdx && dragState.fromRow !== rowIdx
-                const dropRing = isDropTarget
-                  ? dragState.fromRow < rowIdx
-                    ? 'border-b-2 border-b-accent'
-                    : 'border-t-2 border-t-accent'
-                  : ''
-                if (row.type === 'child') {
-                  seq += 1
-                  const n = row.node!
-                  return (
-                    <li
-                      key={`${row.item.kind}-${row.item.refId}-${n.nodeId}`}
-                      onPointerDown={(e) => startPress(e, rowIdx)}
-                      className={`flex items-center gap-2 py-2 pl-6 pr-2.5 transition-colors ${
-                        isDragging ? 'bg-raised/90 ring-1 ring-accent/50' : ''
-                      } ${dropRing}`}
-                    >
-                      <span
-                        onPointerDown={(e) => {
-                          e.stopPropagation()
-                          startPress(e, rowIdx, true)
-                        }}
-                        className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center text-fg-subtle hover:text-fg active:cursor-grabbing"
-                        title="拖动排序"
-                      >
-                        <GripVertical size={13} />
-                      </span>
-                      <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
-                        {String(seq).padStart(2, '0')}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="mono truncate text-[0.75rem] text-fg-soft">{n.rawName}</div>
-                        <div className="mt-0.5 flex items-center gap-1.5">
-                          <span className="mono truncate text-[0.75rem] text-accent-strong/90">{n.outputName}</span>
-                          {duplicates.includes(n.outputName) && <Badge tone="amber">重名</Badge>}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        <button
-                          type="button"
-                          aria-label="上移"
-                          disabled={rowIdx === 0}
-                          onClick={() => moveRow(rowIdx, -1)}
-                          className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
-                        >
-                          <ChevronUp size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="下移"
-                          disabled={rowIdx === rows.length - 1}
-                          onClick={() => moveRow(rowIdx, 1)}
-                          className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
-                        >
-                          <ChevronDown size={13} />
-                        </button>
-                      </div>
-                    </li>
-                  )
-                }
-                const isSource = row.item.kind === 'source'
-                if (!isSource) seq += 1
-                const nodeId = row.node?.nodeId ?? row.item.refId
-                const isRenaming = !isSource && renamingId === nodeId
-                const customName = !isSource ? (overrides[nodeId] ?? '') : ''
-                return (
-                  <li
-                    key={`${row.item.kind}-${row.item.refId}`}
-                    onPointerDown={(e) => startPress(e, rowIdx)}
-                    className={`px-2.5 py-2 transition-colors ${isSource ? 'bg-surface/40' : ''} ${
-                      isDragging ? 'bg-raised/90 ring-1 ring-accent/50' : ''
-                    } ${dropRing}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        onPointerDown={(e) => {
-                          e.stopPropagation()
-                          startPress(e, rowIdx, true)
-                        }}
-                        className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center text-fg-subtle hover:text-fg active:cursor-grabbing"
-                        title="拖动排序"
-                      >
-                        <GripVertical size={13} />
-                      </span>
-                      {isSource ? (
-                        <Layers3 size={13} className="shrink-0 text-accent" />
-                      ) : (
-                        <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
-                          {String(seq).padStart(2, '0')}
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className={`truncate ${isSource ? 'text-strong font-medium text-fg' : 'mono text-[0.75rem] text-fg-soft'}`}>
-                          {isSource ? row.item.label : row.node?.rawName}
-                        </div>
-                        {!isSource && (
-                          <div className="mt-0.5 flex items-center gap-1.5">
-                            <span className="mono truncate text-[0.75rem] text-accent-strong/90">
-                              {customName || row.node?.outputName}
-                            </span>
-                            {customName && <Badge tone="cyan">自定义</Badge>}
-                            {row.node && duplicates.includes(row.node.outputName) && !customName && <Badge tone="amber">重名</Badge>}
-                          </div>
-                        )}
-                      </div>
-                      {isSource && <Badge tone="cyan">整源 {row.item.nodeCount || ''}</Badge>}
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        {!isSource && (
-                          <button
-                            type="button"
-                            aria-label="自定义节点名称"
-                            title="自定义节点名称"
-                            onClick={() => setRenamingId(isRenaming ? null : nodeId)}
-                            className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${
-                              isRenaming || customName
-                                ? 'bg-accent/15 text-accent'
-                                : 'text-fg-subtle hover:bg-raised hover:text-fg'
-                            }`}
-                          >
-                            <Pencil size={12} />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          aria-label={isSource ? `整源上移 ${row.item.label}` : '上移'}
-                          disabled={rowIdx === 0}
-                          onClick={() => moveRow(rowIdx, -1)}
-                          className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
-                        >
-                          <ChevronUp size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={isSource ? `整源下移 ${row.item.label}` : '下移'}
-                          disabled={rowIdx === rows.length - 1}
-                          onClick={() => moveRow(rowIdx, 1)}
-                          className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
-                        >
-                          <ChevronDown size={13} />
-                        </button>
-                      </div>
-                    </div>
-                    {isRenaming && (
-                      <div className="mt-2 flex items-center gap-1.5 pl-8">
-                        <input
-                          className="input mono h-8 flex-1 text-[0.75rem]"
-                          placeholder={row.node?.outputName ?? '留空恢复自动命名'}
-                          value={customName}
-                          onChange={(e) => onOverrides({ ...overrides, [nodeId]: e.target.value })}
-                          autoFocus
-                        />
-                        {customName && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = { ...overrides }
-                              delete next[nodeId]
-                              onOverrides(next)
-                            }}
-                            className="btn btn-ghost h-8 px-2 text-[0.6875rem]"
-                            title="恢复自动命名"
-                          >
-                            恢复默认
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setRenamingId(null)}
-                          className="btn btn-ghost h-8 px-2 text-[0.6875rem]"
-                        >
-                          完成
-                        </button>
-                      </div>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>
+              <SortableContext items={orderGroups.map((g) => g.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-3">
+                  {orderGroups.map((group, groupIdx) => (
+                    <SortableGroupCard
+                      key={group.id}
+                      group={group}
+                      sensors={sensors}
+                      canMoveUp={groupIdx > 0}
+                      canMoveDown={groupIdx < orderGroups.length - 1}
+                      renamingId={renamingId}
+                      overrides={overrides}
+                      duplicates={duplicates}
+                      onMoveUp={() => moveGroup(groupIdx, -1)}
+                      onMoveDown={() => moveGroup(groupIdx, 1)}
+                      onReorderNodes={(fromIdx, toIdx) => moveNodeInGroup(groupIdx, fromIdx, toIdx)}
+                      onToggleRename={(nodeId) => setRenamingId(renamingId === nodeId ? null : nodeId)}
+                      onChangeOverride={(nodeId, val) => onOverrides({ ...overrides, [nodeId]: val })}
+                      onClearOverride={(nodeId) => {
+                        const next = { ...overrides }
+                        delete next[nodeId]
+                        onOverrides(next)
+                      }}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           </>
         )}
         <div className="flex items-center justify-end">
@@ -1179,6 +1005,282 @@ function NodeOrderStep({
         </div>
       </aside>
     </section>
+  )
+}
+
+function SortableGroupCard({
+  group,
+  sensors,
+  canMoveUp,
+  canMoveDown,
+  renamingId,
+  overrides,
+  duplicates,
+  onMoveUp,
+  onMoveDown,
+  onReorderNodes,
+  onToggleRename,
+  onChangeOverride,
+  onClearOverride,
+}: {
+  group: {
+    id: string
+    sourceKey: string
+    sourceType: 'airport' | 'server'
+    sourceId: number
+    label: string
+    isWholeSource: boolean
+    nodes: (ProfileNode & { seq: number })[]
+  }
+  sensors: ReturnType<typeof useSensors>
+  canMoveUp: boolean
+  canMoveDown: boolean
+  renamingId: number | null
+  overrides: Record<number, string>
+  duplicates: string[]
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onReorderNodes: (fromIdx: number, toIdx: number) => void
+  onToggleRename: (nodeId: number) => void
+  onChangeOverride: (nodeId: number, val: string) => void
+  onClearOverride: (nodeId: number) => void
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: group.id,
+  })
+  const [expanded, setExpanded] = useState(true)
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  const handleNodeDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const fromIdx = group.nodes.findIndex((n) => `n:${n.nodeId}` === active.id)
+    const toIdx = group.nodes.findIndex((n) => `n:${n.nodeId}` === over.id)
+    if (fromIdx >= 0 && toIdx >= 0) {
+      onReorderNodes(fromIdx, toIdx)
+    }
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`overflow-hidden rounded-lg border border-line bg-canvas ${
+        isDragging ? 'relative z-20 shadow-lg ring-1 ring-accent/60' : ''
+      }`}
+    >
+      <div className="flex items-center gap-2 bg-surface/60 px-2.5 py-2">
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`拖动来源 ${group.label}`}
+          title="拖动调整来源顺序"
+          className="flex h-7 w-6 shrink-0 touch-none cursor-grab items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg active:cursor-grabbing"
+        >
+          <GripVertical size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          {expanded ? (
+            <ChevronDown size={13} className="shrink-0 text-fg-subtle" />
+          ) : (
+            <ChevronRight size={13} className="shrink-0 text-fg-subtle" />
+          )}
+          <span
+            aria-hidden
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              group.sourceType === 'airport' ? 'bg-[var(--airport-accent)]' : 'bg-[var(--server-accent)]'
+            }`}
+          />
+          <span className="truncate text-strong font-medium text-fg">{group.label}</span>
+          <span className="mono shrink-0 text-meta text-fg-subtle">
+            {group.sourceType === 'airport' ? '机场' : 'VPS'} · {group.nodes.length}
+          </span>
+          {group.isWholeSource && <Badge tone="cyan">整源</Badge>}
+        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            aria-label={`上移来源 ${group.label}`}
+            disabled={!canMoveUp}
+            onClick={onMoveUp}
+            className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+          >
+            <ChevronUp size={13} />
+          </button>
+          <button
+            type="button"
+            aria-label={`下移来源 ${group.label}`}
+            disabled={!canMoveDown}
+            onClick={onMoveDown}
+            className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+          >
+            <ChevronDown size={13} />
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleNodeDragEnd}>
+          <SortableContext items={group.nodes.map((n) => `n:${n.nodeId}`)} strategy={verticalListSortingStrategy}>
+            <ul className="divide-y divide-line/60 border-t border-line/70">
+              {group.nodes.map((n, nodeIdx) => {
+                const isRenaming = renamingId === n.nodeId
+                const customName = overrides[n.nodeId] ?? ''
+                return (
+                  <SortableNodeRow
+                    key={n.nodeId}
+                    node={n}
+                    isRenaming={isRenaming}
+                    customName={customName}
+                    isDuplicate={duplicates.includes(n.outputName) && !customName}
+                    canMoveUp={nodeIdx > 0}
+                    canMoveDown={nodeIdx < group.nodes.length - 1}
+                    onMoveUp={() => onReorderNodes(nodeIdx, nodeIdx - 1)}
+                    onMoveDown={() => onReorderNodes(nodeIdx, nodeIdx + 1)}
+                    onToggleRename={() => onToggleRename(n.nodeId)}
+                    onChangeOverride={(val) => onChangeOverride(n.nodeId, val)}
+                    onClearOverride={() => onClearOverride(n.nodeId)}
+                  />
+                )
+              })}
+            </ul>
+          </SortableContext>
+        </DndContext>
+      )}
+    </div>
+  )
+}
+
+function SortableNodeRow({
+  node,
+  isRenaming,
+  customName,
+  isDuplicate,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  onToggleRename,
+  onChangeOverride,
+  onClearOverride,
+}: {
+  node: ProfileNode & { seq: number }
+  isRenaming: boolean
+  customName: string
+  isDuplicate: boolean
+  canMoveUp: boolean
+  canMoveDown: boolean
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onToggleRename: () => void
+  onChangeOverride: (val: string) => void
+  onClearOverride: () => void
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: `n:${node.nodeId}`,
+  })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`px-2.5 py-2 pl-6 ${isDragging ? 'relative z-10 bg-raised shadow-md ring-1 ring-accent/60' : ''}`}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="拖动排序"
+          title="拖动调整组内顺序"
+          className="flex h-7 w-6 shrink-0 touch-none cursor-grab items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg active:cursor-grabbing"
+        >
+          <GripVertical size={13} />
+        </button>
+        <span className="mono w-6 shrink-0 text-center text-meta text-fg-subtle">
+          {String(node.seq).padStart(2, '0')}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="mono truncate text-[0.75rem] text-fg-soft">{node.rawName}</div>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className="mono truncate text-[0.75rem] text-accent-strong/90">
+              {customName || node.outputName}
+            </span>
+            {customName && <Badge tone="cyan">自定义</Badge>}
+            {isDuplicate && <Badge tone="amber">重名</Badge>}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            aria-label="自定义节点名称"
+            title="自定义节点名称"
+            onClick={onToggleRename}
+            className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${
+              isRenaming || customName ? 'bg-accent/15 text-accent' : 'text-fg-subtle hover:bg-raised hover:text-fg'
+            }`}
+          >
+            <Pencil size={12} />
+          </button>
+          <button
+            type="button"
+            aria-label="上移"
+            disabled={!canMoveUp}
+            onClick={onMoveUp}
+            className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+          >
+            <ChevronUp size={13} />
+          </button>
+          <button
+            type="button"
+            aria-label="下移"
+            disabled={!canMoveDown}
+            onClick={onMoveDown}
+            className="flex h-7 w-7 items-center justify-center rounded text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-30"
+          >
+            <ChevronDown size={13} />
+          </button>
+        </div>
+      </div>
+      {isRenaming && (
+        <div className="mt-2 flex items-center gap-1.5 pl-8">
+          <input
+            className="input mono h-8 flex-1 text-[0.75rem]"
+            placeholder={node.outputName ?? '留空恢复自动命名'}
+            value={customName}
+            onChange={(e) => onChangeOverride(e.target.value)}
+            autoFocus
+          />
+          {customName && (
+            <button
+              type="button"
+              onClick={onClearOverride}
+              className="btn btn-ghost h-8 px-2 text-[0.6875rem]"
+              title="恢复自动命名"
+            >
+              恢复默认
+            </button>
+          )}
+          <button type="button" onClick={onToggleRename} className="btn btn-ghost h-8 px-2 text-[0.6875rem]">
+            完成
+          </button>
+        </div>
+      )}
+    </li>
   )
 }
 
