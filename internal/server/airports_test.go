@@ -168,8 +168,8 @@ func TestAirportRefreshAutoDeletesDisappearedNodes(t *testing.T) {
 	if err := json.Unmarshal(nodesRaw, &nodes); err != nil {
 		t.Fatal(err)
 	}
-	if len(nodes) != 1 || nodes[0].RawName != "HK-01" {
-		t.Fatalf("expected only HK-01 left, got %+v", nodes)
+	if len(nodes) != 1 || nodes[0].RawName != "HK-01" || nodes[0].IsNew {
+		t.Fatalf("expected only HK-01 (isNew=false) left, got %+v", nodes)
 	}
 }
 

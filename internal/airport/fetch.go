@@ -122,8 +122,8 @@ type RefreshStats struct {
 }
 
 // Merge upserts parsed nodes for an airport inside a single transaction.
-// Existing fingerprints are updated, new ones inserted as is_new=1, and nodes
-// that disappeared this round are removed (along with stale profile_item refs).
+// Existing fingerprints are updated, new ones inserted as ready (is_new=0), and
+// nodes that disappeared this round are removed (along with stale profile_item refs).
 func Merge(ctx context.Context, tx *sql.Tx, airportID int64, parsed []protocol.Parsed) (RefreshStats, error) {
 	stats := RefreshStats{Errors: []protocol.ParseError{}}
 	rows, err := tx.QueryContext(ctx,
@@ -173,7 +173,7 @@ func Merge(ctx context.Context, tx *sql.Tx, airportID int64, parsed []protocol.P
 		stats.Added++
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO node(source_type, source_id, protocol, raw_name, fingerprint, config, is_new, missing)
-			 VALUES('airport', ?, ?, ?, ?, ?, 1, 0)`,
+			 VALUES('airport', ?, ?, ?, ?, ?, 0, 0)`,
 			airportID, p.Config.Protocol, p.Name, fp, string(cfgJSON)); err != nil {
 			return stats, err
 		}

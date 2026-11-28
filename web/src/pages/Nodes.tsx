@@ -208,7 +208,7 @@ export function NodesPage({ onNavigate }: { onNavigate: (path: string) => void }
           <SectionLabel>workspace / nodes</SectionLabel>
           <h1 className="mt-1 text-page font-semibold tracking-tight">节点库</h1>
           <p className="mt-1 text-[0.7812rem] text-fg-muted">
-            机场与自建节点统一存放。新出现的机场节点会标记为待确认。
+            机场与自建节点统一存放，机场刷新时自动同步新增与下线节点。
           </p>
         </div>
         <div className="flex items-center gap-2">
