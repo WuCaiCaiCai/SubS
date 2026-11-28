@@ -29,6 +29,18 @@ curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.
 
 > 直连是明文 HTTP。公网使用请务必自行配置反向代理（Caddy / Nginx 等）启用 HTTPS，不要把管理面板继续暴露在明文 HTTP 上；随后可在「设置 → 仅支持 HTTPS 访问」开启强校验。
 
+### 升级
+
+沿用原数据目录重新执行安装脚本即可原地升级，**不会丢失数据**：
+
+```bash
+curl -fsSL https://github.com/WuCaiCaiCai/SubS/releases/latest/download/install.sh | sudo bash
+```
+
+- **数据保留**：`/var/lib/subs` 下的 `subs.db`、`master.key` 等文件会原样保留，服务启动时自动完成数据库结构迁移，既有账号、节点、编排与订阅链接均不受影响。
+- **旧版本回退**：安装脚本会把旧二进制备份为 `/usr/local/bin/subs.old`；升级前也可先在网页「备份」或用 `subs backup` 导出一份 `.sbox` 备份。
+- **自定义参数**：若之前修改过数据目录或监听地址/端口，升级时在交互提示中保持一致即可（或通过 `SUBS_DATA_DIR`、`SUBS_BIND`、`SUBS_PORT`、`SUBS_VERSION=vX.Y.Z` 指定；加 `SUBS_YES=1` 可跳过交互直接按默认值覆盖升级）。
+
 ### 本地跑起来
 
 ```bash
